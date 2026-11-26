@@ -849,7 +849,8 @@ function GameCardHTML(g) {
 
 const ModalUI = {
   openGame(gid) {
-    const g = AppState.games.find(x => x.gameId === gid); if (!g) return;
+    const g = (UserPortal.currentGames || []).find(x => x.gameId === gid) || AppState.games.find(x => x.gameId === gid);
+    if (!g) { Utils.toast('Game details not loaded yet.', 'warn'); return; }
     document.getElementById('modalTitle').textContent = `${g.gameId}: ${g.title}`;
     const fields = [
       ['Genre / Category', g.genre], ['Difficulty', g.difficulty], ['Core Mechanic', g.coreMechanic],
