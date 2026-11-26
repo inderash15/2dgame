@@ -21,15 +21,15 @@ const GameSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const TeamSchema = new mongoose.Schema({
-  teamNumber: { type: String, required: true, unique: true, index: true },
+  teamId: { type: String, required: true, unique: true, index: true, uppercase: true, trim: true },
   department: { type: String, index: true },
   classSheet: String,
   leaderName: { type: String, required: true },
   registerNumber: String,
   leaderClass: String,
-  leaderContact: String, // Admin-only: stripped from public/team responses
+  leaderContact: String, // Admin-only: excluded from public/team responses
   facultyMentor: String,
-  mentorMobile: String,  // Admin-only: stripped from public/team responses
+  mentorMobile: String,  // Admin-only: excluded from public/team responses
   accessCodeHash: String,
   progressStatus: { type: String, default: 'Not Started' },
   progressRemarks: String
@@ -41,7 +41,7 @@ const AllocationSchema = new mongoose.Schema({
   status: { type: String, enum: ['Draft', 'Published', 'Locked'], default: 'Draft' },
   assignments: [{
     gameId: { type: String, required: true },
-    teamNumber: { type: String, required: true },
+    teamId: { type: String, required: true },
     allocatedAt: { type: Date, default: Date.now }
   }],
   teamMeta: { type: Map, of: mongoose.Schema.Types.Mixed },

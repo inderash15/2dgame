@@ -13,16 +13,32 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 
+const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '15mb' }));
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '20mb' }));
 app.use(cookieParser());
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
 
-// Serve the single-file index.html and project files
+// Serve static frontend files
 app.use(express.static(path.resolve(__dirname, '..')));
 
-// Password hashing (scrypt)
+function normalizeTeamId(input) {
+  const cleaned = String(input || '').trim().toUpperCase().replace(/^TEAM\s*/i, '').replace(/[\s\-_]+/g, '');
+  const m = cleaned.match(/^T?0*(\d{1,3})$/);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (n >= 1 && n <= 999) return 'T' + String(n).padStart(3, '0');
+  }
+  return String(input || '').trim().toUpperCase();
+}
+
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   return { salt, hash };
@@ -31,8 +47,6 @@ function verifyPassword(password, salt, expectedHash) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(expectedHash, 'hex'));
 }
-
-// HMAC-signed stateless session token
 function signToken(payload) {
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64url');
@@ -48,7 +62,6 @@ function verifyToken(token) {
   return parsed;
 }
 
-// Auth middleware
 function requireAdmin(req, res, next) {
   const token = req.cookies?.gh_session || req.headers.authorization?.replace('Bearer ', '');
   const user = verifyToken(token);
@@ -59,19 +72,19 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// Server-side 172x7 + 91x6 validation
 function validateAllocationIntegrity(assignments, teams, games) {
   const gameIds = new Set(games.filter(g => !g.archived).map(g => g.gameId));
-  const teamIds = new Set(teams.map(t => t.teamNumber));
+  const teamIds = new Set(teams.map(t => t.teamId));
   const assignedGames = new Set();
   const counts = Object.fromEntries([...teamIds].map(t => [t, 0]));
 
   for (const a of assignments) {
+    const tid = normalizeTeamId(a.teamId);
     if (!gameIds.has(a.gameId)) return { ok: false, error: `Invalid Game ID: ${a.gameId}` };
-    if (!teamIds.has(a.teamNumber)) return { ok: false, error: `Invalid Team ID: ${a.teamNumber}` };
+    if (!teamIds.has(tid)) return { ok: false, error: `Invalid Team ID: ${tid}` };
     if (assignedGames.has(a.gameId)) return { ok: false, error: `Duplicate assignment: ${a.gameId}` };
     assignedGames.add(a.gameId);
-    counts[a.teamNumber]++;
+    counts[tid]++;
   }
   const vals = Object.values(counts);
   const t7 = vals.filter(c => c === 7).length;
@@ -82,7 +95,15 @@ function validateAllocationIntegrity(assignments, teams, games) {
   return { ok: true };
 }
 
-// Auth Routes
+// Health check
+app.get('/api/health', async (_req, res) => {
+  const dbReady = mongoose.connection.readyState === 1;
+  const teamCount = dbReady ? await Team.countDocuments() : 0;
+  const gameCount = dbReady ? await Game.countDocuments() : 0;
+  res.json({ ok: true, dbConnected: dbReady, teamCount, gameCount });
+});
+
+// Admin Login
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   const admin = await AdminUser.findOne({ username });
@@ -95,36 +116,125 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ ok: true, username: admin.username, role: admin.role });
 });
 
-// Public / Team Leader Portal Route (never exposes contact numbers or unpublished drafts)
-app.get('/api/portal/team/:teamNumber', async (req, res) => {
-  const teamNumber = String(req.params.teamNumber || '').toUpperCase().trim();
-  const team = await Team.findOne({ teamNumber }).select('-leaderContact -mentorMobile -accessCodeHash').lean();
-  if (!team) return res.status(404).json({ error: 'Team not found' });
+// Public Team Leader Portal Lookup (consistent teamId field)
+app.get('/api/portal/team/:teamId', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    const teamId = normalizeTeamId(req.params.teamId);
+    const team = await Team.findOne({ teamId }).select('-leaderContact -mentorMobile -accessCodeHash').lean();
+    if (!team) {
+      return res.status(404).json({ error: `Team ${teamId} not found in roster.` });
+    }
 
-  const published = await Allocation.findOne({ status: { $in: ['Published', 'Locked'] } }).sort({ createdAt: -1 }).lean();
-  if (!published) return res.json({ team, published: false, games: [] });
+    const published = await Allocation.findOne({ status: { $in: ['Published', 'Locked'] } }).sort({ createdAt: -1 }).lean();
+    if (!published) {
+      return res.json({ team, published: false, games: [], announcements: [] });
+    }
 
-  const myIds = published.assignments.filter(a => a.teamNumber === teamNumber).map(a => a.gameId);
-  const games = await Game.find({ gameId: { $in: myIds } }).lean();
-  const announcements = await Announcement.find({ target: { $in: ['ALL', teamNumber] } }).sort({ createdAt: -1 }).lean();
-  res.json({ team, published: true, games, announcements });
+    const myIds = published.assignments.filter(a => normalizeTeamId(a.teamId) === teamId).map(a => a.gameId);
+    const games = await Game.find({ gameId: { $in: myIds } }).lean();
+    const announcements = await Announcement.find({ target: { $in: ['ALL', teamId] } }).sort({ createdAt: -1 }).lean();
+    res.json({ team, published: true, games, announcements });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Protected Admin Routes
+// Admin: Import 263 Teams with duplicate/missing/failed tracking
+app.post('/api/admin/import/teams', requireAdmin, async (req, res) => {
+  const incoming = Array.isArray(req.body?.teams) ? req.body.teams : [];
+  const seen = new Set();
+  const duplicateIds = [];
+  const failedRecords = [];
+  const validOps = [];
+
+  for (const raw of incoming) {
+    const teamId = normalizeTeamId(raw.teamId || raw.teamNumber);
+    if (!/^T\d{3}$/.test(teamId) || !raw.leaderName) {
+      failedRecords.push({ raw, reason: 'Invalid teamId or missing leaderName' });
+      continue;
+    }
+    if (seen.has(teamId)) {
+      duplicateIds.push(teamId);
+      continue;
+    }
+    seen.add(teamId);
+    validOps.push({
+      updateOne: {
+        filter: { teamId },
+        update: {
+          $set: {
+            teamId,
+            department: raw.department || '',
+            classSheet: raw.classSheet || '',
+            leaderName: raw.leaderName || '',
+            registerNumber: raw.registerNumber || '',
+            leaderClass: raw.leaderClass || '',
+            leaderContact: raw.leaderContact || '-',
+            facultyMentor: raw.facultyMentor || '',
+            mentorMobile: raw.mentorMobile || '-'
+          }
+        },
+        upsert: true
+      }
+    });
+  }
+
+  if (validOps.length > 0) await Team.bulkWrite(validOps);
+  const expected = Array.from({ length: 263 }, (_, i) => 'T' + String(i + 1).padStart(3, '0'));
+  const missingTeamIds = expected.filter(id => !seen.has(id));
+
+  await AuditLog.create({
+    action: 'TEAM_ROSTER_IMPORT',
+    details: `Imported ${validOps.length}/263 teams (${duplicateIds.length} duplicates, ${failedRecords.length} failed)`,
+    actor: req.user.username,
+    ip: req.ip
+  });
+
+  res.json({
+    ok: true,
+    stats: {
+      totalExtracted: incoming.length,
+      importedCount: validOps.length,
+      failedCount: failedRecords.length,
+      duplicateCount: duplicateIds.length,
+      missingTeamIds
+    }
+  });
+});
+
+// Admin: Import 1,750 Games
+app.post('/api/admin/import/games', requireAdmin, async (req, res) => {
+  const incoming = Array.isArray(req.body?.games) ? req.body.games : [];
+  const ops = incoming.filter(g => g.gameId && g.title).map(g => ({
+    updateOne: {
+      filter: { gameId: String(g.gameId).trim() },
+      update: { $set: { ...g, gameId: String(g.gameId).trim() } },
+      upsert: true
+    }
+  }));
+  if (ops.length > 0) await Game.bulkWrite(ops);
+  await AuditLog.create({ action: 'GAMES_IMPORT', details: `Imported ${ops.length} games`, actor: req.user.username, ip: req.ip });
+  res.json({ ok: true, importedCount: ops.length });
+});
+
+// Admin: Publish Allocation
 app.post('/api/admin/allocations/publish', requireAdmin, async (req, res) => {
   const { version, seed, assignments, teamMeta, sixGameTeams } = req.body || {};
   const [teams, games] = await Promise.all([Team.find().lean(), Game.find().lean()]);
-  const check = validateAllocationIntegrity(assignments || [], teams, games);
+  const normalizedAssignments = (assignments || []).map(a => ({ ...a, teamId: normalizeTeamId(a.teamId || a.teamNumber) }));
+  const check = validateAllocationIntegrity(normalizedAssignments, teams, games);
   if (!check.ok) return res.status(400).json({ error: check.error });
 
   const doc = await Allocation.create({
-    version, seed, status: 'Published', assignments, teamMeta, sixGameTeams, createdBy: req.user.username
+    version, seed, status: 'Published', assignments: normalizedAssignments, teamMeta, sixGameTeams, createdBy: req.user.username
   });
   await AuditLog.create({ action: 'ALLOC_PUBLISH', details: `Published ${version}`, actor: req.user.username, ip: req.ip });
   res.json({ ok: true, id: doc._id });
 });
 
-// Start Server
 async function start() {
   if (process.env.MONGODB_URI) {
     await mongoose.connect(process.env.MONGODB_URI);

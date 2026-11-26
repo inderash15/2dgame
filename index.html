@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GAMEHUB — 2D Game Allocation & Team Management Platform</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
   <!-- Google Fonts: Inter & Space Grotesk -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -114,7 +115,7 @@
             </div>
             <div>
               <label class="form-label">Team Access Code (Optional in Local Demo)</label>
-              <input type="password" id="lookupAccessCode" class="form-control" placeholder="Required if enforced in Settings" />
+              <input type="password" id="lookupAccessCode" class="form-control" autocomplete="current-password" placeholder="Required if enforced in Settings" />
             </div>
             <div class="flex-center">
               <button type="submit" class="btn btn-primary"><i data-lucide="search" width="16"></i> Find My Games</button>
@@ -182,7 +183,7 @@
           <div id="adminSetupForm" style="display:none;">
             <form onsubmit="AuthModule.handleSetup(event)">
               <div class="form-group"><label class="form-label">Admin Username</label><input type="text" id="setupUsername" class="form-control" value="admin" required /></div>
-              <div class="form-group"><label class="form-label">Passcode (min 4 chars)</label><input type="password" id="setupPassword" class="form-control" minlength="4" required /></div>
+              <div class="form-group"><label class="form-label">Passcode (min 4 chars)</label><input type="password" id="setupPassword" class="form-control" autocomplete="new-password" minlength="4" required /></div>
               <button type="submit" class="btn btn-primary" style="width:100%;">Save Local Credentials & Enter</button>
             </form>
           </div>
@@ -190,7 +191,7 @@
           <div id="adminLoginForm" style="display:none;">
             <form onsubmit="AuthModule.handleLogin(event)">
               <div class="form-group"><label class="form-label">Admin Username</label><input type="text" id="loginUsername" class="form-control" required /></div>
-              <div class="form-group"><label class="form-label">Passcode</label><input type="password" id="loginPassword" class="form-control" required /></div>
+              <div class="form-group"><label class="form-label">Passcode</label><input type="password" id="loginPassword" class="form-control" autocomplete="current-password" required /></div>
               <button type="submit" class="btn btn-primary" style="width:100%;">Sign In to Admin Dashboard</button>
             </form>
             <div class="flex-between mt-2 text-xs text-muted">
@@ -518,6 +519,7 @@
                       <div class="form-group"><label class="form-label">Institution Name</label><input type="text" id="setInstName" class="form-control" /></div>
                       <div class="form-group"><label class="form-label">Academic Year</label><input type="text" id="setAcadYear" class="form-control" /></div>
                       <div class="form-group"><label class="form-label">Public Portal Available</label><select id="setPublicPortal" class="form-control"><option value="true">Enabled</option><option value="false">Disabled (Maintenance)</option></select></div>
+                      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Backend API Base URL (Optional — for Vercel + MongoDB Atlas)</label><input type="text" id="setApiBaseUrl" class="form-control mono" placeholder="e.g., https://your-api.onrender.com (blank = local/static mode)" /></div>
                     </div>
                     <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
                   </form>

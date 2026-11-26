@@ -69,6 +69,7 @@ const AppState = {
     institutionName: 'School of Intelligent Systems & Data Science — 2D Game Event',
     academicYear: '2026–27',
     publicPortalEnabled: true,
+    apiBaseUrl: '',
     shuffleSeed: 'SOISDS-2026-SEED-01',
     weights: { category: 25, difficulty: 20, mechanic: 20, department: 15, concept: 10, feasibility: 10 },
     published: false,
@@ -114,6 +115,15 @@ const DataRepository = {
     }
     const savedSettings = await this.get('settings', null);
     if (savedSettings) AppState.settings = { ...AppState.settings, ...savedSettings };
+    // Normalize teamId consistently across stored teams and allocations
+    AppState.teams = (AppState.teams || []).map(t => {
+      const id = Utils.normalizeTeamNumber(t.teamId || t.teamNumber);
+      return { ...t, teamId: id, teamNumber: id };
+    });
+    AppState.allocations = (AppState.allocations || []).map(a => {
+      const id = Utils.normalizeTeamNumber(a.teamId || a.teamNumber);
+      return { ...a, teamId: id, teamNumber: id };
+    });
   },
   async saveState(keys = ['games','teams','allocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory','settings']) {
     for (const k of keys) await this.set(k, AppState[k]);
@@ -273,57 +283,100 @@ const PdfRosterModule = {
     await this.processArrayBuffer(await f.arrayBuffer(), f.name);
     e.target.value = '';
   },
+  async extractFromArrayBuffer(buf) {
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const teamMap = new Map();
+    const duplicateRecords = [];
+    const failedRecords = [];
+    let totalExtracted = 0;
+    let lastMentor = ''; let lastMentorMobile = '';
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const lines = [];
+      for (const item of content.items) {
+        const str = (item.str || '').trim(); if (!str) continue;
+        const x = item.transform[4], y = item.transform[5];
+        let line = lines.find(l => Math.abs(l.y - y) < 3.5);
+        if (!line) { line = { y, items: [] }; lines.push(line); }
+        line.items.push({ x, str });
+      }
+      lines.sort((a, b) => b.y - a.y);
+      lines.forEach(l => l.items.sort((a, b) => a.x - b.x));
+      const pageText = lines.map(l => l.items.map(i => i.str).join(' ')).join('\n');
+      if (/Grouped by Faculty Mentor/i.test(pageText) && teamMap.size >= 263) continue;
+
+      let anchors = null;
+      for (const l of lines) {
+        const joined = l.items.map(i => i.str).join(' ');
+        if (/Team\s*No/i.test(joined) && /Team\s*Leader/i.test(joined)) { anchors = this.detectAnchors(l.items); continue; }
+        if (!anchors) continue;
+        const tMatch = joined.match(/\b(T\d{3})\b/i);
+        if (!tMatch) continue;
+
+        totalExtracted++;
+        const row = this.bin(l.items, anchors);
+        const teamId = Utils.normalizeTeamNumber(tMatch[1]);
+        const leaderName = (row.teamLeader || '').trim();
+
+        if (!/^T\d{3}$/.test(teamId) || !leaderName) {
+          failedRecords.push({ line: joined, reason: 'Missing Team ID or Team Leader' });
+          continue;
+        }
+
+        let mentor = (row.facultyMentor || '').trim();
+        let mentorMobile = (row.mentorMobile || '').trim();
+        if (!mentor && lastMentor) { mentor = lastMentor; mentorMobile = mentorMobile || lastMentorMobile; }
+        else if (mentor) { lastMentor = mentor; lastMentorMobile = mentorMobile; }
+
+        if (teamMap.has(teamId)) {
+          duplicateRecords.push(teamId);
+          continue;
+        }
+
+        teamMap.set(teamId, {
+          sno: row.sno || '', department: row.department || '', classSheet: row.classSheet || '',
+          teamId, teamNumber: teamId, leaderName, registerNumber: row.registerNo || '',
+          leaderClass: row.leaderClass || '', leaderContact: row.leaderContact || '-',
+          facultyMentor: mentor, mentorMobile: mentorMobile || '-', accessCode: ''
+        });
+      }
+    }
+
+    const teams = Array.from(teamMap.values()).sort((a, b) => a.teamId.localeCompare(b.teamId));
+    const expected = Array.from({ length: 263 }, (_, i) => 'T' + String(i + 1).padStart(3, '0'));
+    const missingTeamIds = expected.filter(id => !teamMap.has(id));
+
+    return {
+      teams,
+      stats: {
+        totalExtracted,
+        importedCount: teams.length,
+        failedCount: failedRecords.length,
+        duplicateCount: duplicateRecords.length,
+        missingTeamIds,
+        failedRecords
+      }
+    };
+  },
   async processArrayBuffer(buf, filename) {
     const el = document.getElementById('pdfVerificationArea');
     el.innerHTML = `<div class="alert-box alert-info">Parsing ${Utils.escapeHtml(filename)}...</div>`;
     try {
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      const teamMap = new Map();
-      let lastMentor = ''; let lastMentorMobile = '';
-      for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const content = await page.getTextContent();
-        const lines = [];
-        for (const item of content.items) {
-          const str = (item.str || '').trim(); if (!str) continue;
-          const x = item.transform[4], y = item.transform[5];
-          let line = lines.find(l => Math.abs(l.y - y) < 3.5);
-          if (!line) { line = { y, items: [] }; lines.push(line); }
-          line.items.push({ x, str });
-        }
-        lines.sort((a, b) => b.y - a.y);
-        lines.forEach(l => l.items.sort((a, b) => a.x - b.x));
-        const pageText = lines.map(l => l.items.map(i => i.str).join(' ')).join('\n');
-        if (/Grouped by Faculty Mentor/i.test(pageText) && teamMap.size >= 263) continue;
-
-        let anchors = null;
-        for (const l of lines) {
-          const joined = l.items.map(i => i.str).join(' ');
-          if (/Team\s*No/i.test(joined) && /Team\s*Leader/i.test(joined)) { anchors = this.detectAnchors(l.items); continue; }
-          if (!anchors) continue;
-          const tItem = l.items.find(i => /^T\d{3}$/i.test(i.str.trim()));
-          if (!tItem) continue;
-          const row = this.bin(l.items, anchors);
-          const teamNumber = Utils.normalizeTeamNumber(row.teamNo || tItem.str);
-          let mentor = (row.facultyMentor || '').trim();
-          let mentorMobile = (row.mentorMobile || '').trim();
-          if (!mentor && lastMentor) { mentor = lastMentor; mentorMobile = mentorMobile || lastMentorMobile; }
-          else if (mentor) { lastMentor = mentor; lastMentorMobile = mentorMobile; }
-          if (!teamMap.has(teamNumber)) {
-            teamMap.set(teamNumber, {
-              sno: row.sno || '', department: row.department || '', classSheet: row.classSheet || '',
-              teamNumber, leaderName: row.teamLeader || '', registerNumber: row.registerNo || '',
-              leaderClass: row.leaderClass || '', leaderContact: row.leaderContact || '-',
-              facultyMentor: mentor, mentorMobile: mentorMobile || '-', accessCode: ''
-            });
-          }
-        }
-      }
-      const teams = Array.from(teamMap.values()).sort((a, b) => a.teamNumber.localeCompare(b.teamNumber));
+      const { teams, stats } = await this.extractFromArrayBuffer(buf);
       AppState.pendingPdfTeams = teams;
+      const ok = stats.importedCount === 263 && stats.missingTeamIds.length === 0 && stats.failedCount === 0;
       el.innerHTML = `
-        <div class="alert-box ${teams.length === 263 ? 'alert-success' : 'alert-warn'} mb-2">
-          <div>Extracted <strong>${teams.length} / 263</strong> teams (T001–T263).</div>
+        <div class="alert-box ${ok ? 'alert-success' : 'alert-warn'} mb-2">
+          <div>
+            <strong>PDF Extraction Statistics:</strong><br/>
+            Total extracted: <strong>${stats.totalExtracted}</strong> |
+            Valid unique teams: <strong>${stats.importedCount} / 263</strong> |
+            Duplicates skipped: <strong>${stats.duplicateCount}</strong> |
+            Failed records: <strong>${stats.failedCount}</strong> |
+            Missing Team IDs: <strong>${stats.missingTeamIds.length === 0 ? 'None' : stats.missingTeamIds.join(', ')}</strong>
+          </div>
         </div>
         <button class="btn btn-primary btn-sm" onclick="PdfRosterModule.confirmImport()">Approve & Import ${teams.length} Teams</button>
       `;
@@ -529,27 +582,64 @@ const UserPortal = {
   },
   handleLookupSubmit(e) { e.preventDefault(); this.lookupTeam(document.getElementById('lookupTeamInput').value); },
   clearLookup() { document.getElementById('lookupTeamInput').value = ''; this.currentTeam = null; this.currentGames = []; },
-  lookupTeam(raw) {
+  async lookupTeam(raw) {
     const area = document.getElementById('lookupResultArea');
     if (!AppState.settings.publicPortalEnabled) {
       area.innerHTML = `<div class="alert-box alert-warn">Team Leader Portal is currently disabled by the Administrator.</div>`; return;
     }
-    const tNo = Utils.normalizeTeamNumber(raw);
-    const team = AppState.teams.find(t => t.teamNumber === tNo);
-    if (!team) { area.innerHTML = `<div class="alert-box alert-danger">Team <strong>${Utils.escapeHtml(tNo)}</strong> not found in roster.</div>`; return; }
-
-    const code = document.getElementById('lookupAccessCode')?.value || '';
-    if (team.accessCode && code !== team.accessCode) {
-      area.innerHTML = `<div class="alert-box alert-danger">Invalid Team Access Code for ${Utils.escapeHtml(tNo)}.</div>`; return;
+    const teamId = Utils.normalizeTeamNumber(raw);
+    if (!/^T(00[1-9]|0[1-9]\d|1\d\d|2[0-5]\d|26[0-3])$/.test(teamId)) {
+      area.innerHTML = `<div class="alert-box alert-danger">Invalid Team ID <strong>${Utils.escapeHtml(teamId || raw)}</strong>. Please enter a valid Team ID from T001 to T263.</div>`; return;
     }
 
-    const isPub = AppState.settings.published;
-    const gameMap = new Map(AppState.games.map(g => [g.gameId, g]));
-    const assigned = isPub ? AppState.allocations.filter(a => a.teamNumber === tNo).map(a => gameMap.get(a.gameId)).filter(Boolean) : [];
-    this.currentTeam = team; this.currentGames = assigned;
+    let team = null;
+    let assigned = [];
+    let isPub = AppState.settings.published;
+    let anns = [];
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
 
-    const prog = AppState.teamProgress[tNo] || { status: 'Not Started', remarks: '' };
-    const anns = AppState.announcements.filter(a => a.target === 'ALL' || a.target === tNo);
+    // 1. Try Backend API if configured
+    if (apiBase) {
+      try {
+        area.innerHTML = `<div class="alert-box alert-info">Fetching ${Utils.escapeHtml(teamId)} from backend API...</div>`;
+        const res = await fetch(`${apiBase}/api/portal/team/${encodeURIComponent(teamId)}`);
+        if (res.status === 404) {
+          area.innerHTML = `<div class="alert-box alert-danger">Team <strong>${Utils.escapeHtml(teamId)}</strong> not found in roster.</div>`; return;
+        }
+        if (res.ok) {
+          const data = await res.json();
+          team = data.team;
+          isPub = Boolean(data.published);
+          assigned = data.games || [];
+          anns = data.announcements || [];
+        }
+      } catch (err) {
+        console.warn('Backend lookup fallback to local/static roster:', err.message);
+      }
+    }
+
+    // 2. Local/Static fallback: auto-hydrate roster from deployed PDF if IndexedDB is empty
+    if (!team) {
+      if (AppState.teams.length === 0 && window.location.protocol.startsWith('http')) {
+        area.innerHTML = `<div class="alert-box alert-info">Loading official 263-team roster...</div>`;
+        await App.autoHydrateRoster();
+      }
+      team = AppState.teams.find(t => (t.teamId || t.teamNumber) === teamId);
+      if (!team) {
+        area.innerHTML = `<div class="alert-box alert-danger">Team <strong>${Utils.escapeHtml(teamId)}</strong> not found in roster.</div>`; return;
+      }
+      const code = document.getElementById('lookupAccessCode')?.value || '';
+      if (team.accessCode && code !== team.accessCode) {
+        area.innerHTML = `<div class="alert-box alert-danger">Invalid Team Access Code for ${Utils.escapeHtml(teamId)}.</div>`; return;
+      }
+      const gameMap = new Map(AppState.games.map(g => [g.gameId, g]));
+      assigned = isPub ? AppState.allocations.filter(a => (a.teamId || a.teamNumber) === teamId).map(a => gameMap.get(a.gameId)).filter(Boolean) : [];
+      anns = AppState.announcements.filter(a => a.target === 'ALL' || a.target === teamId);
+    }
+
+    this.currentTeam = team; this.currentGames = assigned;
+    const displayId = team.teamId || team.teamNumber;
+    const prog = AppState.teamProgress[displayId] || { status: team.progressStatus || 'Not Started', remarks: '' };
     const cats = [...new Set(assigned.map(g => g.genre))].sort();
 
     area.innerHTML = `
@@ -557,17 +647,17 @@ const UserPortal = {
       <div class="surface-card mb-3" style="padding:1.4rem;">
         <div class="flex-between mb-2">
           <div class="flex-center">
-            <span class="badge badge-purple">${Utils.escapeHtml(team.teamNumber)}</span>
+            <span class="badge badge-purple">${Utils.escapeHtml(displayId)}</span>
             <span class="badge ${isPub ? 'badge-green' : 'badge-amber'}">${isPub ? 'Published (' + assigned.length + ' Games)' : 'Pending Publication'}</span>
             <span class="badge badge-cyan">Progress: ${Utils.escapeHtml(prog.status)}</span>
           </div>
           <div class="flex-center no-print">
-            <button class="btn btn-secondary btn-sm" onclick="ExportModule.exportTeamPDF('${Utils.escapeHtml(team.teamNumber)}')"><i data-lucide="file-down" width="15"></i> Download Team PDF</button>
+            <button class="btn btn-secondary btn-sm" onclick="ExportModule.exportTeamPDF('${Utils.escapeHtml(displayId)}')"><i data-lucide="file-down" width="15"></i> Download Team PDF</button>
             <button class="btn btn-secondary btn-sm" onclick="window.print()"><i data-lucide="printer" width="15"></i> Print</button>
           </div>
         </div>
         <div class="grid-3">
-          <div><div class="text-xs text-muted">TEAM ID</div><strong>${Utils.escapeHtml(team.teamNumber)}</strong></div>
+          <div><div class="text-xs text-muted">TEAM ID</div><strong>${Utils.escapeHtml(displayId)}</strong></div>
           <div><div class="text-xs text-muted">TEAM LEADER</div><strong>${Utils.escapeHtml(team.leaderName)}</strong></div>
           <div><div class="text-xs text-muted">DEPARTMENT</div><strong>${Utils.escapeHtml(team.department)}</strong></div>
           <div><div class="text-xs text-muted">CLASS</div><strong>${Utils.escapeHtml(team.leaderClass || team.classSheet)}</strong></div>
@@ -575,7 +665,7 @@ const UserPortal = {
           <div><div class="text-xs text-muted">TOTAL ASSIGNED GAMES</div><strong>${assigned.length}</strong></div>
         </div>
       </div>
-      ${!isPub ? `<div class="alert-box alert-warn">Allocations are currently in Draft mode and have not been published by the Administrator yet.</div>` : `
+      ${!isPub ? `<div class="alert-box alert-warn">Roster verified for <strong>${Utils.escapeHtml(displayId)}</strong>. Game allocations are currently in Draft mode and have not been published by the Administrator yet.</div>` : `
         <div class="surface-card mb-2 no-print" style="padding:1rem;">
           <div class="grid-3">
             <input type="text" id="portalSearchTitle" class="form-control" placeholder="Search assigned games..." oninput="UserPortal.renderGames()" />
@@ -1215,6 +1305,8 @@ const SettingsModule = {
     document.getElementById('setInstName').value = AppState.settings.institutionName;
     document.getElementById('setAcadYear').value = AppState.settings.academicYear;
     document.getElementById('setPublicPortal').value = String(AppState.settings.publicPortalEnabled);
+    const apiEl = document.getElementById('setApiBaseUrl');
+    if (apiEl) apiEl.value = AppState.settings.apiBaseUrl || '';
   },
   async save(e) {
     e.preventDefault();
@@ -1222,6 +1314,8 @@ const SettingsModule = {
     AppState.settings.institutionName = document.getElementById('setInstName').value.trim();
     AppState.settings.academicYear = document.getElementById('setAcadYear').value.trim();
     AppState.settings.publicPortalEnabled = document.getElementById('setPublicPortal').value === 'true';
+    const apiEl = document.getElementById('setApiBaseUrl');
+    if (apiEl) AppState.settings.apiBaseUrl = apiEl.value.trim().replace(/\/+$/, '');
     await DataRepository.saveState(['settings']);
     App.refreshAllUI(); Utils.toast('Settings saved.', 'success');
   }
@@ -1268,10 +1362,31 @@ const TestSuite = {
    9. APP CONTROLLER
    ======================================================================== */
 const App = {
+  async autoHydrateRoster() {
+    if (AppState.teams.length === 263) return true;
+    try {
+      const res = await fetch('./SoISDS-2D_Games_Team_Leaders_with_Mentors_T001-T263-v2.pdf');
+      if (!res.ok) return false;
+      const { teams } = await PdfRosterModule.extractFromArrayBuffer(await res.arrayBuffer());
+      if (teams.length > 0) {
+        AppState.teams = teams;
+        AllocationEngine.autoSelectSixGameTeams();
+        await DataRepository.saveState(['teams', 'sixGameTeams']);
+        this.refreshAllUI();
+        return true;
+      }
+    } catch (err) {
+      console.warn('Auto-hydrate roster skipped:', err.message);
+    }
+    return false;
+  },
   async init() {
     if (localStorage.getItem(LS_KEYS.THEME) === 'light') document.documentElement.classList.replace('dark', 'light');
     await DataRepository.init();
     await DataRepository.loadAll();
+    if (AppState.teams.length === 0 && !AppState.settings.apiBaseUrl && window.location.protocol.startsWith('http')) {
+      await this.autoHydrateRoster();
+    }
     LibraryModule.init(); GameManager.init(); TeamManager.init(); PreviewModule.init();
     AuthModule.syncNav(); AuthModule.renderAuthView(); this.refreshAllUI();
     document.getElementById('mobileMenuToggle').addEventListener('click', () => document.getElementById('mainNavLinks').classList.toggle('open'));
