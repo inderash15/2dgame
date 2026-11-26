@@ -55,6 +55,15 @@ const Utils = {
     el.textContent = msg;
     c.appendChild(el);
     setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 220); }, 4000);
+  },
+  apiHeaders(role = null) {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const key = role === 'admin' ? LS_KEYS.ADMIN_SESSION : role === 'mentor' ? LS_KEYS.MENTOR_SESSION : null;
+      const sess = key ? JSON.parse(sessionStorage.getItem(key) || 'null') : null;
+      if (sess?.token) headers.Authorization = `Bearer ${sess.token}`;
+    } catch { /* ignore */ }
+    return headers;
   }
 };
 
@@ -216,8 +225,9 @@ const AuthModule = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: u, password: p })
         });
-        if (!res.ok) { Utils.toast('Invalid admin credentials.', 'error'); return; }
-        sessionStorage.setItem(LS_KEYS.ADMIN_SESSION, JSON.stringify({ authenticated: true, username: u }));
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { Utils.toast(data.error || 'Invalid admin credentials.', 'error'); return; }
+        sessionStorage.setItem(LS_KEYS.ADMIN_SESSION, JSON.stringify({ authenticated: true, username: data.username || u, token: data.token || '' }));
         this.syncNav(); App.navigate('admin-dashboard'); Utils.toast('Signed in via backend.', 'success');
         return;
       } catch (err) {
@@ -379,7 +389,7 @@ const ExcelModule = {
       try {
         const res = await fetch(`${apiBase}/api/admin/import/games`, {
           method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: Utils.apiHeaders('admin'),
           body: JSON.stringify({ games: AppState.pendingExcelGames })
         });
         if (!res.ok) {
@@ -1716,7 +1726,7 @@ const MentorPortal = {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { Utils.toast(data.error || 'Invalid mentor credentials.', 'error'); return; }
         sessionStorage.setItem(LS_KEYS.MENTOR_SESSION, JSON.stringify({
-          authenticated: true, username: data.username, displayName: data.displayName, mustChangePassword: Boolean(data.mustChangePassword), curPass: password
+          authenticated: true, username: data.username, displayName: data.displayName, mustChangePassword: Boolean(data.mustChangePassword), curPass: password, token: data.token || ''
         }));
         if (data.mustChangePassword) {
           document.getElementById('mentorLoginBox').style.display = 'none';
@@ -1766,7 +1776,7 @@ const MentorPortal = {
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/mentor/change-password`, {
         method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: Utils.apiHeaders('mentor'),
         body: JSON.stringify({ currentPassword: s.curPass || 'pass123', newPassword: p1 })
       });
       if (!res.ok) { const d = await res.json().catch(()=>({})); Utils.toast(d.error || 'Password update failed.', 'error'); return; }
@@ -1804,7 +1814,55 @@ const MentorPortal = {
     const s = this.getSession(); if (!s) return [];
     return AppState.teams.filter(t => t.facultyMentor === s.displayName);
   },
-  renderDashboard() {
+  async syncFromBackend() {
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+    const s = this.getSession();
+    if (!apiBase || !s) return;
+    try {
+      const res = await fetch(`${apiBase}/api/mentor/teams`, {
+        credentials: 'include',
+        headers: Utils.apiHeaders('mentor'),
+        cache: 'no-store'
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.ok) return;
+      if (Array.isArray(data.teams) && data.teams.length) {
+        const byId = new Map(AppState.teams.map(t => [t.teamId, t]));
+        data.teams.forEach(t => {
+          const id = Utils.normalizeTeamNumber(t.teamId);
+          byId.set(id, { ...(byId.get(id) || {}), ...t, teamId: id });
+          AppState.teamProgress[id] = {
+            status: t.progressStatus || 'Not Started',
+            pct: Number(t.completionPct) || 0,
+            remarks: t.progressRemarks || '',
+            updatedAt: t.updatedAt || ''
+          };
+        });
+        AppState.teams = [...byId.values()].sort((a, b) => a.teamId.localeCompare(b.teamId));
+      }
+      if (Array.isArray(data.games) && data.games.length) {
+        const gById = new Map(AppState.games.map(g => [g.gameId, g]));
+        data.games.forEach(g => gById.set(g.gameId, { ...(gById.get(g.gameId) || {}), ...g }));
+        AppState.games = [...gById.values()];
+      }
+      if (Array.isArray(data.progressHistory)) {
+        AppState.progressHistory = data.progressHistory.map(h => ({ ...h, updatedAt: h.updatedAt || h.createdAt }));
+      }
+      await DataRepository.saveState(['teams', 'games', 'teamProgress', 'progressHistory']);
+    } catch (err) {
+      console.warn('Mentor backend sync skipped:', err.message);
+    }
+  },
+  async renderDashboard() {
+    const s = this.getSession(); if (!s) return;
+    this._renderDashboardDOM();
+    if ((AppState.settings.apiBaseUrl || '').trim()) {
+      await this.syncFromBackend();
+      this._renderDashboardDOM();
+    }
+  },
+  _renderDashboardDOM() {
     const s = this.getSession(); if (!s) return;
     document.getElementById('mentorWelcomeTitle').textContent = `Welcome, ${s.displayName}`;
     const myTeams = this.getMyTeams();
@@ -1915,6 +1973,22 @@ const MentorPortal = {
     const reviewDate = document.getElementById('mpDate').value;
     const now = new Date().toISOString();
 
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/mentor/progress`, {
+          method: 'POST', credentials: 'include',
+          headers: Utils.apiHeaders('mentor'),
+          body: JSON.stringify({ teamId, newStatus, newPct, remarks, reviewDate })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { Utils.toast(data.error || 'Failed to save progress to server.', 'error'); return; }
+      } catch (err) {
+        Utils.toast('Backend unreachable: ' + err.message, 'error');
+        return;
+      }
+    }
+
     AppState.teamProgress[teamId] = { status: newStatus, pct: newPct, remarks, reviewDate, updatedAt: now };
     AppState.progressHistory.unshift({ teamId, mentorId: s.username, mentorName: s.displayName, previousStatus: prev.status, newStatus, previousPct: prev.pct || 0, newPct, remarks, reviewDate, updatedAt: now });
     await DataRepository.saveState(['teamProgress', 'progressHistory']);
@@ -1981,7 +2055,10 @@ const App = {
     if (localStorage.getItem(LS_KEYS.THEME) === 'dark') document.documentElement.classList.replace('light', 'dark');
     await DataRepository.init();
     await DataRepository.loadAll();
-    if ((AppState.teams.length === 0 || !AppState.settings.published) && !AppState.settings.apiBaseUrl && window.location.protocol.startsWith('http')) {
+    if (AppState.settings.apiBaseUrl) {
+      fetch(`${AppState.settings.apiBaseUrl.replace(/\/+$/, '')}/api/health`, { cache: 'no-store' }).catch(() => {});
+    }
+    if ((AppState.games.length === 0 || AppState.teams.length === 0 || !AppState.settings.published) && window.location.protocol.startsWith('http')) {
       await this.autoHydrateRoster();
     }
     LibraryModule.init(); GameManager.init(); TeamManager.init(); PreviewModule.init();

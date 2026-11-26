@@ -316,7 +316,7 @@ app.post('/api/auth/login', rlAuth, asyncHandler(async (req, res) => {
     secure: process.env.NODE_ENV === 'production'
   });
   await AuditLog.create({ action: 'ADMIN_LOGIN', details: `Admin ${admin.username} signed in`, actor: admin.username, ip: req.ip });
-  res.json({ ok: true, username: admin.username, role: admin.role });
+  res.json({ ok: true, username: admin.username, role: admin.role, token });
 }));
 
 app.get('/api/admin/mentors', requireAdmin, rlDashboard, asyncHandler(async (_req, res) => {
@@ -393,7 +393,7 @@ app.post('/api/mentor/login', rlAuth, asyncHandler(async (req, res) => {
     secure: process.env.NODE_ENV === 'production'
   });
   await AuditLog.create({ action: 'MENTOR_LOGIN', details: `Mentor ${username} signed in`, actor: username, ip: req.ip });
-  res.json({ ok: true, username: mentor.username, displayName: mentor.displayName, mustChangePassword: mentor.mustChangePassword });
+  res.json({ ok: true, username: mentor.username, displayName: mentor.displayName, mustChangePassword: mentor.mustChangePassword, token });
 }));
 
 app.post('/api/mentor/change-password', requireMentor, rlPassReset, asyncHandler(async (req, res) => {
