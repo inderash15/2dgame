@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,76 +22,89 @@
 </head>
 <body>
 
-  <!-- TOP NAVIGATION -->
+  <!-- TOP NAVIGATION (VISION-INSPIRED FLOATING PILL) -->
   <header class="navbar no-print">
     <div class="container navbar-inner">
       <div class="brand" onclick="App.navigate('home')">
-        <div class="brand-icon"><i data-lucide="gamepad-2"></i></div>
-        <span id="brandPlatformName">GAMEHUB</span>
-        <span class="badge-pro" id="brandAcadYear">2026–27</span>
+        <span class="brand-wordmark"><span class="brand-light">SoISDS</span> <strong id="brandPlatformName">GameHub</strong></span>
       </div>
 
       <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Toggle Menu"><i data-lucide="menu"></i></button>
 
-      <nav class="nav-links" id="mainNavLinks">
-        <button class="nav-btn active" data-nav="home" onclick="App.navigate('home')"><i data-lucide="home" width="16"></i> Home</button>
-        <button class="nav-btn" data-nav="lookup" onclick="App.navigate('lookup')"><i data-lucide="compass" width="16"></i> Team Leader Portal</button>
-        <button class="nav-btn" data-nav="library" onclick="App.navigate('library')"><i data-lucide="library" width="16"></i> Game Catalog</button>
-        <button class="nav-btn" data-nav="admin-login" id="navLoginBtn" onclick="App.navigate('admin-login')"><i data-lucide="shield" width="16"></i> Admin Login</button>
-        <button class="nav-btn" data-nav="admin-dashboard" id="navDashboardBtn" style="display:none;" onclick="App.navigate('admin-dashboard')"><i data-lucide="layout-dashboard" width="16"></i> Admin Dashboard</button>
-        <button class="btn btn-secondary btn-sm" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode">
-          <i data-lucide="sun-moon" width="15"></i>
-        </button>
+      <nav class="nav-links nav-pill-center" id="mainNavLinks">
+        <button class="nav-btn active" data-nav="home" onclick="App.navigate('home')">Home</button>
+        <button class="nav-btn" data-nav="lookup" onclick="App.navigate('lookup')">Portal</button>
+        <span class="nav-center-emblem" onclick="App.navigate('home')" title="GAMEHUB"><i data-lucide="gamepad-2" width="16"></i></span>
+        <button class="nav-btn" data-nav="library" onclick="App.navigate('library')">Catalog</button>
+        <button class="nav-btn" data-nav="admin-login" id="navLoginBtn" onclick="App.navigate('admin-login')">Admin</button>
+        <button class="nav-btn" data-nav="admin-dashboard" id="navDashboardBtn" style="display:none;" onclick="App.navigate('admin-dashboard')">Dashboard</button>
       </nav>
+
+      <div class="nav-actions">
+        <button class="btn btn-icon-ghost" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode" aria-label="Toggle Theme">
+          <i data-lucide="sun-moon" width="16"></i>
+        </button>
+        <span class="nav-pill-meta" id="brandAcadYear">2026–27</span>
+        <button class="btn btn-primary btn-pill" onclick="App.navigate('lookup')">Find Games</button>
+      </div>
     </div>
   </header>
 
   <main>
     <!-- SECTION 1: HOMEPAGE -->
     <section id="section-home" class="page-section active">
-      <div class="container">
-        <div class="hero">
-          <div class="hero-pill"><i data-lucide="sparkles" width="14"></i> <span id="heroInstitutionLabel">School of Intelligent Systems & Data Science — 2D Game Event</span></div>
-          <h1>Discover Your Team's Games</h1>
-          <p class="subtitle">Enter your Team ID (e.g. T050) to access your published 2D game concepts, announcements, progress status, and downloadable team brief.</p>
+      <div class="hero-stage">
+        <div class="hero-beam"></div>
+        <div class="container">
+          <div class="hero">
+            <p class="hero-kicker" id="heroInstitutionLabel">School of Intelligent Systems & Data Science — 2D Game Event</p>
+            <h1><span class="hero-light">Discover Your Team's</span><br><span class="hero-bold">2D Game Orbit</span></h1>
+            <p class="subtitle">1,750 Unique Concepts · 263 Teams · Seeded Intelligent Allocation</p>
 
-          <form class="glass-card hero-search-box" onsubmit="UserPortal.handleHeroLookup(event)">
-            <input type="text" id="heroTeamInput" placeholder="Enter Team ID (e.g., T050)..." aria-label="Team ID" required />
-            <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="compass" width="17"></i> Find My Games</button>
-          </form>
+            <div class="hero-cta-row">
+              <button type="button" class="btn btn-secondary btn-pill" onclick="App.navigate('library')">Explore Catalog</button>
+              <button type="button" class="btn btn-primary btn-pill" onclick="App.navigate('lookup')">Team Portal <i data-lucide="arrow-right" width="15"></i></button>
+            </div>
 
-          <div class="stats-grid" style="text-align:left;">
-            <div class="glass-card stat-card">
-              <div class="stat-icon" style="background:rgba(139,92,246,0.16); color:#a78bfa;"><i data-lucide="joystick" width="22"></i></div>
-              <div><div class="stat-value" id="homeStatGames">0</div><div class="stat-label">Unique 2D Games</div></div>
+            <form class="hero-search-box" onsubmit="UserPortal.handleHeroLookup(event)">
+              <i data-lucide="search" width="17" class="hero-search-icon"></i>
+              <input type="text" id="heroTeamInput" placeholder="Enter Team ID (e.g., T001, T050)..." aria-label="Team ID" required />
+              <button type="submit" class="btn btn-primary btn-pill">Find My Games</button>
+            </form>
+
+            <div class="stats-grid" style="text-align:left;">
+              <div class="stat-card">
+                <div><div class="stat-value" id="homeStatGames">0</div><div class="stat-label">Unique 2D Games</div></div>
+              </div>
+              <div class="stat-card">
+                <div><div class="stat-value" id="homeStatTeams">0</div><div class="stat-label">Registered Teams</div></div>
+              </div>
+              <div class="stat-card">
+                <div><div class="stat-value" id="homeStatAllocated">0</div><div class="stat-label">Allocated Games</div></div>
+              </div>
+              <div class="stat-card">
+                <div><div class="stat-value" id="homeStatPublishStatus" style="font-size:1.15rem;">Draft</div><div class="stat-label">Publication Status</div></div>
+              </div>
             </div>
-            <div class="glass-card stat-card">
-              <div class="stat-icon" style="background:rgba(59,130,246,0.16); color:#60a5fa;"><i data-lucide="users" width="22"></i></div>
-              <div><div class="stat-value" id="homeStatTeams">0</div><div class="stat-label">Registered Teams</div></div>
-            </div>
-            <div class="glass-card stat-card">
-              <div class="stat-icon" style="background:rgba(16,185,129,0.16); color:#34d399;"><i data-lucide="check-circle-2" width="22"></i></div>
-              <div><div class="stat-value" id="homeStatAllocated">0</div><div class="stat-label">Allocated Games</div></div>
-            </div>
-            <div class="glass-card stat-card">
-              <div class="stat-icon" style="background:rgba(6,182,212,0.16); color:#22d3ee;"><i data-lucide="globe" width="22"></i></div>
-              <div><div class="stat-value" id="homeStatPublishStatus" style="font-size:1.15rem;">Draft</div><div class="stat-label">Publication Status</div></div>
-            </div>
+
+            <div class="hero-sparkle" aria-hidden="true">✦</div>
           </div>
         </div>
+      </div>
 
+      <div class="container" style="margin-top:1.5rem;">
         <div id="homeAnnouncementsArea" class="mb-3"></div>
 
-        <div id="homeOnboardingBanner" class="surface-card mb-3" style="padding:1.4rem; border-color:rgba(139,92,246,0.35);">
+        <div id="homeOnboardingBanner" class="surface-card mb-3" style="padding:1.4rem;">
           <div class="flex-between">
             <div style="max-width:780px;">
-              <span class="badge badge-purple mb-1">Local Demonstration Mode</span>
-              <h2 style="font-size:1.2rem; margin-bottom:0.3rem;">Initialize Authoritative Catalog & Team Roster</h2>
+              <span class="badge badge-slate mb-1">Administrator Console</span>
+              <h2 style="font-size:1.15rem; margin-bottom:0.25rem;">Manage Catalog, Roster & Seeded Allocation</h2>
               <p class="text-muted text-sm">
-                Sign in to the Admin Console to load <code>1750_Unique_Non_Duplicate_2D_Games.xlsx</code> and <code>SoISDS-2D_Games_Team_Leaders_with_Mentors_T001-T263-v2.pdf</code>, run the seeded 172×7 / 91×6 allocation engine, and publish to Team Leaders.
+                Sign in to Admin to import <code>1750_Unique_Non_Duplicate_2D_Games.xlsx</code> and <code>SoISDS-2D_Games_Team_Leaders_with_Mentors_T001-T263-v2.pdf</code>, validate all 11 rules, and publish allocations.
               </p>
             </div>
-            <button class="btn btn-primary" onclick="App.navigate('admin-login')"><i data-lucide="shield-check" width="16"></i> Open Admin Console</button>
+            <button class="btn btn-primary btn-pill" onclick="App.navigate('admin-login')"><i data-lucide="shield-check" width="15"></i> Open Admin Console</button>
           </div>
         </div>
       </div>

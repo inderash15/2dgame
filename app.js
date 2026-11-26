@@ -1481,7 +1481,7 @@ const App = {
     return false;
   },
   async init() {
-    if (localStorage.getItem(LS_KEYS.THEME) === 'light') document.documentElement.classList.replace('dark', 'light');
+    if (localStorage.getItem(LS_KEYS.THEME) === 'dark') document.documentElement.classList.replace('light', 'dark');
     await DataRepository.init();
     await DataRepository.loadAll();
     if ((AppState.teams.length === 0 || !AppState.settings.published) && !AppState.settings.apiBaseUrl && window.location.protocol.startsWith('http')) {
