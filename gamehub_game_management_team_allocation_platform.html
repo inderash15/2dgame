@@ -1,0 +1,4253 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GameHub — Game Management & Team Allocation Platform</title>
+  
+  <!-- Google Fonts: Inter & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+
+  <!-- CDN Dependencies: ExcelJS, Chart.js, Lucide Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.395.0/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       1. DESIGN TOKENS & THEME VARIABLES
+       ========================================================================== */
+    :root {
+      --bg-base: #060913;
+      --bg-surface: #0d1323;
+      --bg-elevated: #141c33;
+      --bg-glass: rgba(17, 25, 46, 0.72);
+      --border-subtle: rgba(148, 163, 184, 0.14);
+      --border-glow: rgba(139, 92, 246, 0.45);
+      
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+
+      --accent-purple: #8b5cf6;
+      --accent-purple-dark: #6d28d9;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+
+      --grad-primary: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+      --grad-hover: linear-gradient(135deg, #9d75fa 0%, #5294f8 100%);
+      --grad-surface: linear-gradient(180deg, rgba(20, 28, 51, 0.9) 0%, rgba(13, 19, 35, 0.95) 100%);
+      --shadow-neon: 0 0 24px rgba(139, 92, 246, 0.25);
+      --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 22px;
+      --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ==========================================================================
+       2. BASE & RESET STYLES
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.55;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-image:
+        radial-gradient(circle at 15% 10%, rgba(139, 92, 246, 0.13) 0%, transparent 40%),
+        radial-gradient(circle at 85% 20%, rgba(59, 130, 246, 0.12) 0%, transparent 42%),
+        radial-gradient(circle at 50% 90%, rgba(6, 182, 212, 0.08) 0%, transparent 45%);
+      background-attachment: fixed;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1, h2, h3, h4, .font-display {
+      font-family: 'Space Grotesk', 'Inter', sans-serif;
+      letter-spacing: -0.02em;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, input, select, textarea { font-family: inherit; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: #263252; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-purple); }
+
+    /* ==========================================================================
+       3. LAYOUT & NAVIGATION
+       ========================================================================== */
+    .container {
+      width: 100%;
+      max-width: 1340px;
+      margin: 0 auto;
+      padding: 0 1.25rem;
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(6, 9, 19, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .navbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 70px;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.35rem;
+      cursor: pointer;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 11px;
+      background: var(--grad-primary);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      box-shadow: var(--shadow-neon);
+    }
+
+    .brand span.badge-pro {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: rgba(139, 92, 246, 0.18);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      color: #c4b5fd;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 0.95rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .nav-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-btn.active {
+      color: #fff;
+      background: rgba(139, 92, 246, 0.16);
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.15);
+    }
+
+    .mobile-menu-btn {
+      display: none;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 0.55rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    @media (max-width: 860px) {
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 70px;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        background: #0b1020;
+        border-bottom: 1px solid var(--border-subtle);
+        padding: 1rem;
+        gap: 0.5rem;
+        box-shadow: 0 20px 30px rgba(0,0,0,0.7);
+      }
+      .nav-links.open { display: flex; }
+      .mobile-menu-btn { display: inline-flex; }
+    }
+
+    main {
+      flex: 1;
+      padding-bottom: 4rem;
+    }
+
+    .page-section {
+      display: none;
+      animation: fadeSlideIn 0.28s ease forwards;
+    }
+    .page-section.active {
+      display: block;
+    }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ==========================================================================
+       4. REUSABLE UI COMPONENTS (CARDS, BUTTONS, INPUTS, BADGES, TABLES)
+       ========================================================================== */
+    .glass-card {
+      background: var(--bg-glass);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .surface-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.2rem;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-primary {
+      background: var(--grad-primary);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--grad-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(139, 92, 246, 0.5);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-subtle);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      border-color: var(--accent-purple);
+      background: #1b2542;
+    }
+
+    .btn-success {
+      background: rgba(16, 185, 129, 0.16);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+    .btn-success:hover:not(:disabled) {
+      background: rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.15);
+      color: #fb7185;
+      border-color: rgba(244, 63, 94, 0.35);
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(244, 63, 94, 0.26);
+    }
+
+    .btn-sm {
+      padding: 0.42rem 0.78rem;
+      font-size: 0.82rem;
+    }
+
+    .btn-lg {
+      padding: 0.85rem 1.6rem;
+      font-size: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.42rem;
+    }
+
+    .form-label {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.68rem 0.95rem;
+      border-radius: var(--radius-sm);
+      background: #080c18;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      font-size: 0.92rem;
+      transition: var(--transition);
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+    }
+
+    textarea.form-control {
+      min-height: 95px;
+      resize: vertical;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.24rem 0.65rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .badge-purple { background: rgba(139, 92, 246, 0.16); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.32); }
+    .badge-blue { background: rgba(59, 130, 246, 0.16); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.32); }
+    .badge-cyan { background: rgba(6, 182, 212, 0.16); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.32); }
+    .badge-green { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.32); }
+    .badge-amber { background: rgba(245, 158, 11, 0.16); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.32); }
+    .badge-rose { background: rgba(244, 63, 94, 0.16); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.32); }
+    .badge-slate { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.25); }
+
+    /* Tables */
+    .table-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: rgba(8, 12, 24, 0.6);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+
+    th {
+      background: rgba(20, 28, 51, 0.9);
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.74rem;
+      letter-spacing: 0.05em;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(139, 92, 246, 0.06); }
+
+    /* ==========================================================================
+       5. HERO & HOME SECTION
+       ========================================================================== */
+    .hero {
+      padding: 4rem 0 3rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      border-radius: 99px;
+      background: rgba(139, 92, 246, 0.14);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      color: #c4b5fd;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 1.4rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.15rem, 5vw, 3.6rem);
+      font-weight: 700;
+      line-height: 1.12;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #ffffff 25%, #c4b5fd 65%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p.subtitle {
+      max-width: 680px;
+      margin: 0 auto 2.2rem;
+      color: var(--text-secondary);
+      font-size: clamp(1rem, 2vw, 1.16rem);
+    }
+
+    .hero-search-box {
+      max-width: 560px;
+      margin: 0 auto 3rem;
+      padding: 0.65rem;
+      display: flex;
+      gap: 0.65rem;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 0 40px rgba(139, 92, 246, 0.2);
+    }
+
+    .hero-search-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 1.05rem;
+      padding: 0.65rem 1rem;
+    }
+
+    .hero-search-box input:focus { outline: none; }
+
+    @media (max-width: 540px) {
+      .hero-search-box { flex-direction: column; }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 3rem;
+    }
+
+    .stat-card {
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1.1rem;
+      transition: var(--transition);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--border-glow);
+    }
+
+    .stat-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .stat-value {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.95rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      margin-top: 0.2rem;
+    }
+
+    /* ==========================================================================
+       6. GAME CARDS GRID & PAGINATION
+       ========================================================================== */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      padding: 1.15rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+
+    .filter-bar .search-wrap {
+      flex: 1 1 260px;
+      position: relative;
+    }
+
+    .filter-bar .search-wrap i,
+    .filter-bar .search-wrap svg {
+      position: absolute;
+      left: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      width: 17px;
+      height: 17px;
+    }
+
+    .filter-bar .search-wrap input {
+      padding-left: 2.5rem;
+    }
+
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .game-card {
+      background: var(--grad-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 1.35rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1rem;
+      transition: var(--transition);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .game-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--grad-primary);
+      opacity: 0;
+      transition: var(--transition);
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-glow);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55), 0 0 20px rgba(139, 92, 246, 0.16);
+    }
+
+    .game-card:hover::before { opacity: 1; }
+
+    .game-card-title {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0.45rem 0;
+    }
+
+    .game-card-desc {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .pagination-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1.75rem;
+      padding: 1rem 1.25rem;
+    }
+
+    /* ==========================================================================
+       7. ADMIN DASHBOARD LAYOUT & SIDEBAR
+       ========================================================================== */
+    .admin-shell {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 1.5rem;
+      padding-top: 1.75rem;
+      align-items: start;
+    }
+
+    @media (max-width: 980px) {
+      .admin-shell {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .admin-sidebar {
+      position: sticky;
+      top: 88px;
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    @media (max-width: 980px) {
+      .admin-sidebar {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+    }
+
+    .sidebar-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.72rem 0.95rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: var(--transition);
+      text-align: left;
+    }
+
+    .sidebar-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+    }
+
+    .sidebar-btn.active {
+      background: var(--grad-primary);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+    }
+
+    .admin-tab { display: none; }
+    .admin-tab.active { display: block; animation: fadeSlideIn 0.24s ease; }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.25rem;
+      margin-top: 1.25rem;
+    }
+
+    .chart-box {
+      padding: 1.35rem;
+      height: 330px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-canvas-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+
+    /* ==========================================================================
+       8. MODALS, ALERTS, EMPTY STATES & TOASTS
+       ========================================================================== */
+    .alert-banner {
+      padding: 1rem 1.2rem;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.32);
+      color: #fde68a;
+    }
+
+    .alert-info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.32);
+      color: #bfdbfe;
+    }
+
+    .alert-danger {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.32);
+      color: #fecdd3;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3.25rem 1.5rem;
+      border: 1px dashed rgba(148, 163, 184, 0.24);
+      border-radius: var(--radius-lg);
+      background: rgba(13, 19, 35, 0.45);
+    }
+
+    .empty-icon {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 1rem;
+      border-radius: 16px;
+      background: rgba(139, 92, 246, 0.14);
+      color: #c4b5fd;
+      display: grid;
+      place-items: center;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(3, 6, 15, 0.78);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+      animation: fadeIn 0.18s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal-card {
+      width: 100%;
+      max-width: 620px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: #0f1629;
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75);
+      padding: 1.65rem;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.9rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .modal-close {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .modal-close:hover { color: #fff; border-color: var(--accent-rose); }
+
+    /* Toast Notifications */
+    .toast-container {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      z-index: 80;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      max-width: 380px;
+      width: calc(100vw - 2.5rem);
+    }
+
+    .toast {
+      padding: 0.9rem 1.1rem;
+      border-radius: var(--radius-md);
+      background: #131c33;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 0.88rem;
+      animation: slideLeft 0.22s ease;
+    }
+
+    @keyframes slideLeft {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 2.5px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .flex-center { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .mt-1 { margin-top: 0.5rem; }
+    .mt-2 { margin-top: 1rem; }
+    .mt-3 { margin-top: 1.5rem; }
+    .mb-1 { margin-bottom: 0.5rem; }
+    .mb-2 { margin-bottom: 1rem; }
+    .mb-3 { margin-bottom: 1.5rem; }
+    .text-muted { color: var(--text-secondary); }
+    .text-sm { font-size: 0.85rem; }
+    .text-xs { font-size: 0.76rem; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================================
+       TOP NAVIGATION BAR
+       ======================================================================== -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <div class="brand" onclick="App.navigate('home')">
+        <div class="brand-icon"><i data-lucide="gamepad-2"></i></div>
+        <span>GameHub</span>
+        <span class="badge-pro">Arena OS</span>
+      </div>
+
+      <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Toggle Menu">
+        <i data-lucide="menu"></i>
+      </button>
+
+      <nav class="nav-links" id="mainNavLinks">
+        <button class="nav-btn active" data-nav="home" onclick="App.navigate('home')">
+          <i data-lucide="home" width="16"></i> Home
+        </button>
+        <button class="nav-btn" data-nav="lookup" onclick="App.navigate('lookup')">
+          <i data-lucide="search" width="16"></i> Find My Games
+        </button>
+        <button class="nav-btn" data-nav="library" onclick="App.navigate('library')">
+          <i data-lucide="library" width="16"></i> Game Library
+        </button>
+        <button class="nav-btn" data-nav="admin-login" id="navLoginBtn" onclick="App.navigate('admin-login')">
+          <i data-lucide="shield" width="16"></i> Admin Login
+        </button>
+        <button class="nav-btn" data-nav="admin-dashboard" id="navDashboardBtn" style="display:none;" onclick="App.navigate('admin-dashboard')">
+          <i data-lucide="layout-dashboard" width="16"></i> Admin Dashboard
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- ======================================================================
+         SECTION 1: HOMEPAGE
+         ====================================================================== -->
+    <section id="section-home" class="page-section active">
+      <div class="container">
+        <div class="hero">
+          <div class="hero-pill">
+            <i data-lucide="sparkles" width="15"></i>
+            Next-Gen Tournament & Game Allocation Engine
+          </div>
+          <h1>Discover Your Team's Games</h1>
+          <p class="subtitle">
+            Enter your team number and explore your assigned game titles, creative themes and detailed concepts.
+          </p>
+
+          <form class="glass-card hero-search-box" onsubmit="UserPortal.handleHeroLookup(event)">
+            <input
+              type="text"
+              id="heroTeamInput"
+              placeholder="Enter Team Number (e.g., 12 or T-05)..."
+              aria-label="Team Number"
+              required
+            />
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i data-lucide="compass" width="18"></i> Find My Games
+            </button>
+          </form>
+
+          <!-- Live Statistics -->
+          <div class="stats-grid" style="text-align:left;">
+            <div class="glass-card stat-card">
+              <div class="stat-icon" style="background:rgba(139,92,246,0.18); color:#c4b5fd;">
+                <i data-lucide="joystick" width="26"></i>
+              </div>
+              <div>
+                <div class="stat-value" id="homeStatGames">0</div>
+                <div class="stat-label">Total Game Titles</div>
+              </div>
+            </div>
+
+            <div class="glass-card stat-card">
+              <div class="stat-icon" style="background:rgba(59,130,246,0.18); color:#93c5fd;">
+                <i data-lucide="users" width="26"></i>
+              </div>
+              <div>
+                <div class="stat-value" id="homeStatTeams">0</div>
+                <div class="stat-label">Registered Teams</div>
+              </div>
+            </div>
+
+            <div class="glass-card stat-card">
+              <div class="stat-icon" style="background:rgba(16,185,129,0.18); color:#6ee7b7;">
+                <i data-lucide="check-circle-2" width="26"></i>
+              </div>
+              <div>
+                <div class="stat-value" id="homeStatAllocated">0</div>
+                <div class="stat-label">Allocated Games</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Onboarding / Quick Start Banner when dataset is empty -->
+        <div id="homeOnboardingBanner" class="surface-card mb-3" style="padding:1.75rem; border-color:rgba(139,92,246,0.35);">
+          <div class="flex-between">
+            <div style="max-width:760px;">
+              <span class="badge badge-purple mb-1">Administrator Quick Start</span>
+              <h2 style="font-size:1.35rem; margin-bottom:0.4rem;">Ready to Load Your Game Catalog</h2>
+              <p class="text-muted text-sm">
+                This workspace starts clean with zero pre-loaded records. To initialize your event:
+                <strong>1)</strong> Configure local demo admin credentials in <em>Admin Login</em>,
+                <strong>2)</strong> Import your Excel workbook (up to 1,750+ game titles) via <em>Excel Import</em>, and
+                <strong>3)</strong> Create active teams and run the <em>Unique Allocation Engine</em>.
+              </p>
+            </div>
+            <div class="flex-center">
+              <button class="btn btn-primary" onclick="App.navigate('admin-login')">
+                <i data-lucide="shield-check" width="17"></i> Setup Admin & Import
+              </button>
+              <button class="btn btn-secondary" onclick="ExcelModule.downloadSampleTemplate()">
+                <i data-lucide="file-spreadsheet" width="17"></i> Sample .xlsx Template
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explore Platform Feature Cards -->
+        <div class="mt-3">
+          <h2 class="mb-2" style="font-size:1.45rem;">Explore Platform Capabilities</h2>
+          <div class="grid-3">
+            <div class="surface-card" style="padding:1.4rem;">
+              <span class="badge badge-blue mb-1"><i data-lucide="users" width="13"></i> Team Portal</span>
+              <h3 style="font-size:1.1rem; margin-bottom:0.4rem;">Instant Team Lookup</h3>
+              <p class="text-muted text-sm mb-2">
+                Teams enter their assigned number to view only their dedicated game concepts, filter by category, and read full design briefs.
+              </p>
+              <button class="btn btn-secondary btn-sm" onclick="App.navigate('lookup')">Open Team Lookup</button>
+            </div>
+
+            <div class="surface-card" style="padding:1.4rem;">
+              <span class="badge badge-purple mb-1"><i data-lucide="database" width="13"></i> High Scale</span>
+              <h3 style="font-size:1.1rem; margin-bottom:0.4rem;">1,750+ Game Catalog</h3>
+              <p class="text-muted text-sm mb-2">
+                Browse the complete catalog with instant debounced search by title, theme, or Game ID, category filters, and smooth pagination.
+              </p>
+              <button class="btn btn-secondary btn-sm" onclick="App.navigate('library')">Browse Game Library</button>
+            </div>
+
+            <div class="surface-card" style="padding:1.4rem;">
+              <span class="badge badge-green mb-1"><i data-lucide="cpu" width="13"></i> Zero Duplicates</span>
+              <h3 style="font-size:1.1rem; margin-bottom:0.4rem;">Unique Allocation Engine</h3>
+              <p class="text-muted text-sm mb-2">
+                Guarantees 1-to-1 exclusive game ownership across active teams with balanced distribution, preview verification, and Excel reporting.
+              </p>
+              <button class="btn btn-secondary btn-sm" onclick="App.navigate('admin-login')">Admin Console</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 2: FIND MY GAMES (TEAM LOOKUP)
+         ====================================================================== -->
+    <section id="section-lookup" class="page-section">
+      <div class="container" style="padding-top:2.25rem;">
+        <div class="flex-between mb-3">
+          <div>
+            <h1 style="font-size:2rem;">Find My Team's Games</h1>
+            <p class="text-muted text-sm">Enter your team number to inspect your exclusively assigned game titles.</p>
+          </div>
+        </div>
+
+        <!-- Team Search Form -->
+        <div class="surface-card mb-3" style="padding:1.35rem;">
+          <form class="flex-center" onsubmit="UserPortal.handleLookupSubmit(event)">
+            <div style="flex:1 1 260px;">
+              <input
+                type="text"
+                id="lookupTeamInput"
+                class="form-control"
+                placeholder="Enter Team Number (e.g., 1, 25, T-10)..."
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="search" width="16"></i> Retrieve Team Games
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="UserPortal.clearLookup()">
+              Reset
+            </button>
+          </form>
+        </div>
+
+        <!-- Lookup Results Container -->
+        <div id="lookupResultArea">
+          <div class="empty-state">
+            <div class="empty-icon"><i data-lucide="crosshair" width="28"></i></div>
+            <h3>Awaiting Team Number</h3>
+            <p class="text-muted text-sm mt-1" style="max-width:460px; margin-inline:auto;">
+              Enter your team number above to validate your roster and load your team's assigned game concepts.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 3: GAME LIBRARY (ALL GAMES)
+         ====================================================================== -->
+    <section id="section-library" class="page-section">
+      <div class="container" style="padding-top:2.25rem;">
+        <div class="flex-between mb-2">
+          <div>
+            <h1 style="font-size:2rem;">Game Library</h1>
+            <p class="text-muted text-sm">Explore all registered game titles, themes, and full creative concepts.</p>
+          </div>
+          <div>
+            <span class="badge badge-purple" style="font-size:0.85rem; padding:0.4rem 0.9rem;">
+              <i data-lucide="layers" width="15"></i>
+              Showing <span id="libFilteredCount">0</span> of <span id="libTotalCount">0</span> Games
+            </span>
+          </div>
+        </div>
+
+        <!-- Library Controls -->
+        <div class="surface-card filter-bar">
+          <div class="search-wrap">
+            <i data-lucide="search"></i>
+            <input
+              type="text"
+              id="libSearchInput"
+              class="form-control"
+              placeholder="Search by Game Title, Theme, or Game ID..."
+              oninput="LibraryModule.onSearchInput()"
+            />
+          </div>
+
+          <select id="libCategoryFilter" class="form-control" style="width:auto; min-width:170px;" onchange="LibraryModule.resetAndRender()">
+            <option value="ALL">All Categories</option>
+          </select>
+
+          <select id="libSortSelect" class="form-control" style="width:auto; min-width:185px;" onchange="LibraryModule.resetAndRender()">
+            <option value="id-asc">Sort: Game ID (A → Z)</option>
+            <option value="title-asc">Sort: Title (A → Z)</option>
+            <option value="title-desc">Sort: Title (Z → A)</option>
+            <option value="theme-asc">Sort: Theme (A → Z)</option>
+          </select>
+
+          <select id="libPageSize" class="form-control" style="width:auto;" onchange="LibraryModule.resetAndRender()">
+            <option value="24">24 / page</option>
+            <option value="48">48 / page</option>
+            <option value="96">96 / page</option>
+          </select>
+        </div>
+
+        <!-- Library Cards Grid -->
+        <div id="libraryGridContainer"></div>
+
+        <!-- Library Pagination -->
+        <div id="libraryPagination" class="surface-card pagination-bar" style="display:none;"></div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 4: ADMIN AUTHENTICATION (LOCAL DEMO SETUP & LOGIN)
+         ====================================================================== -->
+    <section id="section-admin-login" class="page-section">
+      <div class="container" style="padding-top:2.5rem; max-width:540px;">
+        <div class="surface-card" style="padding:2rem;">
+          <div class="flex-center mb-2">
+            <div class="brand-icon"><i data-lucide="shield-alert"></i></div>
+            <div>
+              <h1 style="font-size:1.55rem;" id="authCardTitle">Admin Access</h1>
+              <p class="text-muted text-xs">Local Demonstration Authentication</p>
+            </div>
+          </div>
+
+          <!-- Mandatory Security & Architecture Transparency Notice -->
+          <div class="alert-banner alert-warning mb-3">
+            <i data-lucide="alert-triangle" width="20" style="flex-shrink:0; margin-top:2px;"></i>
+            <div>
+              <strong>Security Notice (Client-Side Demo):</strong> Because GameHub runs as a standalone browser HTML application using <code>LocalStorage</code>, no real password is hardcoded in source code. Credentials and records stored in LocalStorage can be inspected or edited via browser DevTools and are intended for local demonstration or single-station event management—not multi-user internet production security.
+            </div>
+          </div>
+
+          <!-- First-Time Setup Form (Shown if no local demo admin exists yet) -->
+          <form id="adminSetupForm" style="display:none;" onsubmit="AuthModule.handleSetup(event)">
+            <div class="badge badge-cyan mb-2">First-Time Local Setup</div>
+            <p class="text-muted text-sm mb-2">
+              Create your local demonstration administrator account to unlock the Admin Dashboard.
+            </p>
+            <div class="form-group mb-2">
+              <label class="form-label">Demo Admin Username</label>
+              <input type="text" id="setupUsername" class="form-control" placeholder="e.g., admin" minlength="3" required />
+            </div>
+            <div class="form-group mb-2">
+              <label class="form-label">Demo Admin Passcode</label>
+              <input type="password" id="setupPassword" class="form-control" placeholder="Minimum 6 characters" minlength="6" required />
+            </div>
+            <div class="form-group mb-3">
+              <label class="form-label">Session Timeout (Minutes)</label>
+              <select id="setupTimeout" class="form-control">
+                <option value="15">15 Minutes</option>
+                <option value="30" selected>30 Minutes</option>
+                <option value="60">60 Minutes</option>
+                <option value="180">3 Hours</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;">
+              <i data-lucide="key-round" width="17"></i> Save Local Demo Credentials & Enter
+            </button>
+          </form>
+
+          <!-- Login Form (Shown once local demo admin is configured) -->
+          <form id="adminLoginForm" style="display:none;" onsubmit="AuthModule.handleLogin(event)">
+            <div class="form-group mb-2">
+              <label class="form-label">Username</label>
+              <input type="text" id="loginUsername" class="form-control" placeholder="Enter your local demo username" required />
+            </div>
+            <div class="form-group mb-3">
+              <label class="form-label">Passcode</label>
+              <input type="password" id="loginPassword" class="form-control" placeholder="Enter your local demo passcode" required />
+            </div>
+            <button type="submit" class="btn btn-primary mb-2" style="width:100%;">
+              <i data-lucide="log-in" width="17"></i> Sign In to Admin Dashboard
+            </button>
+            <div class="flex-between text-xs text-muted mt-2 pt-2" style="border-top:1px solid var(--border-subtle);">
+              <span>Forgot local demo credentials?</span>
+              <button type="button" class="btn btn-danger btn-sm" onclick="AuthModule.promptResetCredentials()">
+                Reset Demo Credentials
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 5: ADMIN DASHBOARD (PROTECTED)
+         ====================================================================== -->
+    <section id="section-admin-dashboard" class="page-section">
+      <div class="container">
+        <div class="admin-shell">
+          <!-- Admin Sidebar -->
+          <aside class="surface-card admin-sidebar">
+            <div style="padding:0.4rem 0.6rem 0.8rem; border-bottom:1px solid var(--border-subtle); width:100%;">
+              <div class="text-xs text-muted">Authenticated Demo Session</div>
+              <div class="flex-between mt-1">
+                <strong id="adminSessionUser" class="text-sm">admin</strong>
+                <span class="badge badge-green" id="sessionTimerBadge">Active</span>
+              </div>
+            </div>
+
+            <button class="sidebar-btn active" data-tab="overview" onclick="AdminUI.switchTab('overview')">
+              <i data-lucide="pie-chart" width="17"></i> Overview & Analytics
+            </button>
+            <button class="sidebar-btn" data-tab="games" onclick="AdminUI.switchTab('games')">
+              <i data-lucide="gamepad-2" width="17"></i> Game Management
+            </button>
+            <button class="sidebar-btn" data-tab="import" onclick="AdminUI.switchTab('import')">
+              <i data-lucide="file-spreadsheet" width="17"></i> Excel Import
+            </button>
+            <button class="sidebar-btn" data-tab="teams" onclick="AdminUI.switchTab('teams')">
+              <i data-lucide="users" width="17"></i> Team Management
+            </button>
+            <button class="sidebar-btn" data-tab="allocation" onclick="AdminUI.switchTab('allocation')">
+              <i data-lucide="shuffle" width="17"></i> Allocation Engine
+            </button>
+            <button class="sidebar-btn" data-tab="reports" onclick="AdminUI.switchTab('reports')">
+              <i data-lucide="file-bar-chart-2" width="17"></i> Reports & Backup
+            </button>
+
+            <div style="margin-top:0.8rem; padding-top:0.8rem; border-top:1px solid var(--border-subtle); width:100%;">
+              <button class="btn btn-danger btn-sm" style="width:100%;" onclick="AuthModule.logout()">
+                <i data-lucide="log-out" width="15"></i> Logout Session
+              </button>
+            </div>
+          </aside>
+
+          <!-- Admin Content Panels -->
+          <div class="admin-content">
+
+            <!-- ----------------------------------------------------------------
+                 MODULE A: OVERVIEW & ANALYTICS
+                 ---------------------------------------------------------------- -->
+            <div id="admin-tab-overview" class="admin-tab active">
+              <div class="flex-between mb-2">
+                <div>
+                  <h2 style="font-size:1.65rem;">Dashboard Overview</h2>
+                  <p class="text-muted text-sm">Real-time allocation telemetry, capacity distribution, and system architecture notes.</p>
+                </div>
+                <div class="flex-center">
+                  <button class="btn btn-secondary btn-sm" onclick="AdminUI.switchTab('import')">
+                    <i data-lucide="upload" width="15"></i> Import Excel
+                  </button>
+                  <button class="btn btn-primary btn-sm" onclick="AdminUI.switchTab('allocation')">
+                    <i data-lucide="shuffle" width="15"></i> Run Allocation
+                  </button>
+                </div>
+              </div>
+
+              <!-- 6 KPI Cards -->
+              <div class="grid-3">
+                <div class="surface-card" style="padding:1.2rem;">
+                  <div class="text-xs text-muted">TOTAL GAMES</div>
+                  <div class="stat-value mt-1" id="kpiTotalGames">0</div>
+                </div>
+                <div class="surface-card" style="padding:1.2rem;">
+                  <div class="text-xs text-muted">TOTAL TEAMS (ACTIVE / ALL)</div>
+                  <div class="stat-value mt-1" id="kpiTotalTeams">0 / 0</div>
+                </div>
+                <div class="surface-card" style="padding:1.2rem;">
+                  <div class="text-xs text-muted">ALLOCATED GAMES</div>
+                  <div class="stat-value mt-1" style="color:#34d399;" id="kpiAllocatedGames">0</div>
+                </div>
+                <div class="surface-card" style="padding:1.2rem;">
+                  <div class="text-xs text-muted">UNALLOCATED GAMES</div>
+                  <div class="stat-value mt-1" style="color:#fbbf24;" id="kpiUnallocatedGames">0</div>
+                </div>
+                <div class="surface-card" style="padding:1.2rem;">
+                  <div class="text-xs text-muted">AVG GAMES / ACTIVE TEAM</div>
+                  <div class="stat-value mt-1" id="kpiAvgGames">0.0</div>
+                </div>
+                <div class="surface-card" style="padding:1.2rem;">
+                  <div class="text-xs text-muted">ALLOCATION COVERAGE</div>
+                  <div class="stat-value mt-1" style="color:#c4b5fd;" id="kpiAllocPercent">0%</div>
+                </div>
+              </div>
+
+              <!-- Charts -->
+              <div class="charts-grid">
+                <div class="surface-card chart-box">
+                  <h3 style="font-size:1rem; margin-bottom:0.75rem;">Allocation Status Breakdown</h3>
+                  <div class="chart-canvas-wrap">
+                    <canvas id="allocationPieChart"></canvas>
+                  </div>
+                </div>
+
+                <div class="surface-card chart-box">
+                  <h3 style="font-size:1rem; margin-bottom:0.75rem;">Games Assigned Per Team (Top 25)</h3>
+                  <div class="chart-canvas-wrap">
+                    <canvas id="teamBarChart"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Architecture & Production MongoDB Upgrade Documentation -->
+              <div class="surface-card mt-3" style="padding:1.4rem;">
+                <div class="flex-center mb-1">
+                  <i data-lucide="server" width="18" style="color:#60a5fa;"></i>
+                  <h3 style="font-size:1.05rem;">Architecture Limitations & MongoDB Production Upgrade Path</h3>
+                </div>
+                <p class="text-muted text-sm mb-2">
+                  <strong>Current Standalone Mode:</strong> All games, teams, and allocations persist in browser <code>LocalStorage</code> (~5MB browser quota, easily supporting 1,750+ game records). Because LocalStorage is isolated per browser/device and inspectable by users, multi-device simultaneous access requires a centralized backend.
+                </p>
+                <div class="grid-3 text-xs text-muted">
+                  <div style="background:rgba(8,12,24,0.65); padding:0.85rem; border-radius:8px; border:1px solid var(--border-subtle);">
+                    <strong style="color:#c4b5fd;">1. MongoDB Atlas Collections</strong><br/>
+                    Migrate <code>games</code>, <code>teams</code>, and <code>allocations</code> (with unique index on <code>gameId</code>) to MongoDB for atomic concurrency safety.
+                  </div>
+                  <div style="background:rgba(8,12,24,0.65); padding:0.85rem; border-radius:8px; border:1px solid var(--border-subtle);">
+                    <strong style="color:#93c5fd;">2. REST / GraphQL API Layer</strong><br/>
+                    Expose Node.js/Express or FastAPI endpoints with server-side pagination and transactional bulk-allocation writes.
+                  </div>
+                  <div style="background:rgba(8,12,24,0.65); padding:0.85rem; border-radius:8px; border:1px solid var(--border-subtle);">
+                    <strong style="color:#6ee7b7;">3. JWT & RBAC Auth</strong><br/>
+                    Replace client-side demo auth with HTTP-only JWT cookies, bcrypt password hashing, and role-based access control.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ----------------------------------------------------------------
+                 MODULE B: GAME MANAGEMENT
+                 ---------------------------------------------------------------- -->
+            <div id="admin-tab-games" class="admin-tab">
+              <div class="flex-between mb-2">
+                <div>
+                  <h2 style="font-size:1.65rem;">Game Management</h2>
+                  <p class="text-muted text-sm">Create, edit, inspect, and manage all game titles and their allocation statuses.</p>
+                </div>
+                <button class="btn btn-primary" onclick="GameManager.openGameFormModal()">
+                  <i data-lucide="plus" width="16"></i> Add New Game
+                </button>
+              </div>
+
+              <div class="surface-card filter-bar">
+                <div class="search-wrap">
+                  <i data-lucide="search"></i>
+                  <input type="text" id="adminGameSearch" class="form-control" placeholder="Search Game ID, Title, or Theme..." oninput="GameManager.onSearch()" />
+                </div>
+                <select id="adminGameStatusFilter" class="form-control" style="width:auto;" onchange="GameManager.resetAndRender()">
+                  <option value="ALL">All Statuses</option>
+                  <option value="ALLOCATED">Allocated Only</option>
+                  <option value="UNALLOCATED">Unallocated Only</option>
+                </select>
+                <select id="adminGameCatFilter" class="form-control" style="width:auto;" onchange="GameManager.resetAndRender()">
+                  <option value="ALL">All Categories</option>
+                </select>
+              </div>
+
+              <div class="surface-card" style="padding:1rem;">
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Game ID</th>
+                        <th>Game Title</th>
+                        <th>Theme</th>
+                        <th>Category</th>
+                        <th>Allocation Status</th>
+                        <th style="text-align:right;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminGamesTableBody"></tbody>
+                  </table>
+                </div>
+                <div id="adminGamesPagination" class="flex-between mt-2 text-sm"></div>
+              </div>
+            </div>
+
+            <!-- ----------------------------------------------------------------
+                 MODULE C: EXCEL IMPORT
+                 ---------------------------------------------------------------- -->
+            <div id="admin-tab-import" class="admin-tab">
+              <div class="flex-between mb-2">
+                <div>
+                  <h2 style="font-size:1.65rem;">Excel Workbook Import</h2>
+                  <p class="text-muted text-sm">Upload an <code>.xlsx</code> workbook, map columns, validate duplicates, and bulk-import up to 1,750+ games.</p>
+                </div>
+                <button class="btn btn-secondary" onclick="ExcelModule.downloadSampleTemplate()">
+                  <i data-lucide="download" width="16"></i> Download Sample Excel Template
+                </button>
+              </div>
+
+              <!-- Step 1: Upload File -->
+              <div class="surface-card mb-2" style="padding:1.4rem;">
+                <h3 style="font-size:1.05rem; margin-bottom:0.75rem;">Step 1: Select Excel Workbook (.xlsx)</h3>
+                <div class="flex-center">
+                  <input type="file" id="excelFileInput" accept=".xlsx,.xls" class="form-control" style="max-width:420px;" onchange="ExcelModule.handleFileUpload(event)" />
+                  <span id="excelUploadStatus" class="text-sm text-muted">Expected columns: Game ID, Game Title, Theme, Explanation, Category (optional)</span>
+                </div>
+              </div>
+
+              <!-- Step 2: Column Mapping & Import Options -->
+              <div id="excelMappingPanel" class="surface-card mb-2" style="padding:1.4rem; display:none;">
+                <div class="flex-between mb-2">
+                  <h3 style="font-size:1.05rem;">Step 2: Map Spreadsheet Columns & Conflict Strategy</h3>
+                  <select id="excelSheetSelect" class="form-control" style="width:auto;" onchange="ExcelModule.onSheetChange()"></select>
+                </div>
+
+                <div class="grid-3 mb-2">
+                  <div class="form-group">
+                    <label class="form-label">Game ID Column *</label>
+                    <select id="mapGameId" class="form-control" onchange="ExcelModule.buildPreview()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Game Title Column *</label>
+                    <select id="mapTitle" class="form-control" onchange="ExcelModule.buildPreview()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Theme Column *</label>
+                    <select id="mapTheme" class="form-control" onchange="ExcelModule.buildPreview()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Explanation Column *</label>
+                    <select id="mapExplanation" class="form-control" onchange="ExcelModule.buildPreview()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Category Column (Optional)</label>
+                    <select id="mapCategory" class="form-control" onchange="ExcelModule.buildPreview()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Existing Game ID Mode</label>
+                    <select id="importConflictMode" class="form-control" onchange="ExcelModule.buildPreview()">
+                      <option value="skip">Skip Existing Game IDs</option>
+                      <option value="update">Update Existing Game IDs</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 3: Validation Preview & Execution -->
+              <div id="excelPreviewPanel" class="surface-card mb-2" style="padding:1.4rem; display:none;">
+                <div class="flex-between mb-2">
+                  <div>
+                    <h3 style="font-size:1.05rem;">Step 3: Validation Summary & Preview</h3>
+                    <div id="excelValidationBadges" class="flex-center mt-1"></div>
+                  </div>
+                  <button class="btn btn-primary" id="btnConfirmImport" onclick="ExcelModule.executeImport()">
+                    <i data-lucide="check-circle" width="16"></i> Import Valid Records
+                  </button>
+                </div>
+
+                <!-- Invalid Rows Table -->
+                <div id="excelInvalidSection" class="mb-2" style="display:none;">
+                  <h4 class="text-sm mb-1" style="color:#fb7185;">Invalid / Rejected Rows (Will Not Be Imported)</h4>
+                  <div class="table-wrapper" style="max-height:220px;">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Row #</th>
+                          <th>Game ID</th>
+                          <th>Title</th>
+                          <th>Validation Error</th>
+                        </tr>
+                      </thead>
+                      <tbody id="excelInvalidBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Valid Preview Table -->
+                <h4 class="text-sm mb-1" style="color:#6ee7b7;">Valid Records Preview (First 25 Rows)</h4>
+                <div class="table-wrapper" style="max-height:300px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Row #</th>
+                        <th>Action</th>
+                        <th>Game ID</th>
+                        <th>Title</th>
+                        <th>Theme</th>
+                        <th>Category</th>
+                        <th>Explanation</th>
+                      </tr>
+                    </thead>
+                    <tbody id="excelValidPreviewBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Import History -->
+              <div class="surface-card" style="padding:1.4rem;">
+                <h3 style="font-size:1.05rem; margin-bottom:0.75rem;">Import Audit History</h3>
+                <div id="importHistoryContainer"></div>
+              </div>
+            </div>
+
+            <!-- ----------------------------------------------------------------
+                 MODULE D: TEAM MANAGEMENT
+                 ---------------------------------------------------------------- -->
+            <div id="admin-tab-teams" class="admin-tab">
+              <div class="flex-between mb-2">
+                <div>
+                  <h2 style="font-size:1.65rem;">Team Management</h2>
+                  <p class="text-muted text-sm">Create teams, toggle active status for allocation eligibility, and inspect team rosters.</p>
+                </div>
+                <div class="flex-center">
+                  <button class="btn btn-secondary" onclick="TeamManager.openBulkCreateModal()">
+                    <i data-lucide="layers" width="16"></i> Bulk Generate Teams
+                  </button>
+                  <button class="btn btn-primary" onclick="TeamManager.openTeamModal()">
+                    <i data-lucide="user-plus" width="16"></i> Add Team
+                  </button>
+                </div>
+              </div>
+
+              <div class="surface-card filter-bar">
+                <div class="search-wrap">
+                  <i data-lucide="search"></i>
+                  <input type="text" id="adminTeamSearch" class="form-control" placeholder="Search Team Number or Name..." oninput="TeamManager.renderTeams()" />
+                </div>
+                <select id="adminTeamStatusFilter" class="form-control" style="width:auto;" onchange="TeamManager.renderTeams()">
+                  <option value="ALL">All Teams</option>
+                  <option value="active">Active Only</option>
+                  <option value="inactive">Inactive Only</option>
+                </select>
+              </div>
+
+              <div class="surface-card" style="padding:1rem;">
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Team Number</th>
+                        <th>Team Name</th>
+                        <th>Status</th>
+                        <th>Assigned Games</th>
+                        <th style="text-align:right;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminTeamsTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- ----------------------------------------------------------------
+                 MODULE E: UNIQUE ALLOCATION ENGINE
+                 ---------------------------------------------------------------- -->
+            <div id="admin-tab-allocation" class="admin-tab">
+              <div class="mb-2">
+                <h2 style="font-size:1.65rem;">Unique Allocation Engine</h2>
+                <p class="text-muted text-sm">
+                  Enforces strict 1-to-1 exclusive ownership: every game is assigned to at most ONE active team with balanced distribution.
+                </p>
+              </div>
+
+              <div class="grid-2 mb-2">
+                <!-- Automatic Distribution Panel -->
+                <div class="surface-card" style="padding:1.4rem;">
+                  <span class="badge badge-purple mb-1">Automated Balanced Distribution</span>
+                  <h3 style="font-size:1.12rem; margin-bottom:0.5rem;">Generate Allocation Plan</h3>
+                  <p class="text-muted text-sm mb-2">
+                    Distributes games evenly across all <strong>active</strong> teams. Remainder games are distributed one-by-one across teams.
+                  </p>
+
+                  <div class="form-group mb-2">
+                    <label class="form-label">Allocation Mode</label>
+                    <select id="allocModeSelect" class="form-control">
+                      <option value="unassigned">MODE 1: Allocate Unassigned Games Only (Preserves Existing)</option>
+                      <option value="reallocate_all">MODE 2: Reallocate ALL Games Across Active Teams (Overwrites)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group mb-3">
+                    <label class="form-label">Ordering Strategy</label>
+                    <select id="allocOrderSelect" class="form-control">
+                      <option value="random">Cryptographic / Fair Shuffle (Recommended)</option>
+                      <option value="sequential">Sequential by Game ID</option>
+                    </select>
+                  </div>
+
+                  <button class="btn btn-primary" style="width:100%;" onclick="AllocationEngine.generatePreview()">
+                    <i data-lucide="eye" width="16"></i> Preview Allocation Before Saving
+                  </button>
+                </div>
+
+                <!-- Manual Assignment / Reassignment Panel -->
+                <div class="surface-card" style="padding:1.4rem;">
+                  <span class="badge badge-cyan mb-1">Manual Override</span>
+                  <h3 style="font-size:1.12rem; margin-bottom:0.5rem;">Manual Assign / Reassign Game</h3>
+                  <p class="text-muted text-sm mb-2">
+                    Assign an unallocated game to a team, reassign an existing game, or remove an assignment.
+                  </p>
+
+                  <div class="form-group mb-2">
+                    <label class="form-label">Game ID</label>
+                    <input type="text" id="manualGameIdInput" class="form-control" placeholder="Enter exact Game ID (e.g., G001)" />
+                  </div>
+
+                  <div class="form-group mb-3">
+                    <label class="form-label">Target Team</label>
+                    <select id="manualTeamSelect" class="form-control"></select>
+                  </div>
+
+                  <div class="flex-center">
+                    <button class="btn btn-secondary" style="flex:1;" onclick="AllocationEngine.handleManualAssign()">
+                      <i data-lucide="link" width="15"></i> Assign / Reassign
+                    </button>
+                    <button class="btn btn-danger" onclick="AllocationEngine.handleManualUnassign()">
+                      <i data-lucide="unlink" width="15"></i> Unassign
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mandatory Preview Panel (Hidden until generated) -->
+              <div id="allocationPreviewCard" class="surface-card mb-2" style="padding:1.4rem; display:none; border-color:var(--accent-purple);">
+                <div class="flex-between mb-2">
+                  <div>
+                    <span class="badge badge-amber mb-1">Verification Required</span>
+                    <h3 style="font-size:1.15rem;">Allocation Preview & Integrity Check</h3>
+                    <p id="allocPreviewSummary" class="text-sm text-muted mt-1"></p>
+                  </div>
+                  <div class="flex-center">
+                    <button class="btn btn-secondary" onclick="AllocationEngine.cancelPreview()">Cancel</button>
+                    <button class="btn btn-primary" onclick="AllocationEngine.commitPreview()">
+                      <i data-lucide="check-circle-2" width="16"></i> Confirm & Commit Allocation
+                    </button>
+                  </div>
+                </div>
+
+                <div class="table-wrapper" style="max-height:280px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Team Number</th>
+                        <th>Team Name</th>
+                        <th>Existing Games</th>
+                        <th>Newly Added</th>
+                        <th>Expected Total Games</th>
+                      </tr>
+                    </thead>
+                    <tbody id="allocPreviewTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Allocation History -->
+              <div class="surface-card" style="padding:1.4rem;">
+                <div class="flex-between mb-2">
+                  <h3 style="font-size:1.05rem;">Allocation Audit Log</h3>
+                  <button class="btn btn-danger btn-sm" onclick="AllocationEngine.promptClearAllAllocations()">
+                    <i data-lucide="trash-2" width="14"></i> Clear All Allocations
+                  </button>
+                </div>
+                <div id="allocationHistoryContainer"></div>
+              </div>
+            </div>
+
+            <!-- ----------------------------------------------------------------
+                 MODULE F: REPORTS & DATA BACKUP
+                 ---------------------------------------------------------------- -->
+            <div id="admin-tab-reports" class="admin-tab">
+              <div class="mb-2">
+                <h2 style="font-size:1.65rem;">Reports & Data Backup</h2>
+                <p class="text-muted text-sm">Export Excel reports, download full JSON system backups, or restore data safely.</p>
+              </div>
+
+              <!-- Excel Reports Export -->
+              <div class="surface-card mb-2" style="padding:1.4rem;">
+                <h3 style="font-size:1.08rem; margin-bottom:0.85rem;">Excel Spreadsheet Exports (.xlsx)</h3>
+                <div class="flex-center">
+                  <button class="btn btn-primary" onclick="ReportModule.exportAllAllocationsExcel()">
+                    <i data-lucide="file-spreadsheet" width="16"></i> Export Team-Wise Allocations (.xlsx)
+                  </button>
+                  <button class="btn btn-secondary" onclick="ReportModule.exportAllGamesExcel()">
+                    <i data-lucide="table" width="16"></i> Export Complete Game Catalog (.xlsx)
+                  </button>
+                  <button class="btn btn-secondary" onclick="ReportModule.exportUnallocatedExcel()">
+                    <i data-lucide="file-minus" width="16"></i> Export Unallocated Games (.xlsx)
+                  </button>
+                </div>
+
+                <div class="flex-center mt-2 pt-2" style="border-top:1px solid var(--border-subtle);">
+                  <span class="text-sm text-muted">Individual Team Report:</span>
+                  <select id="reportSingleTeamSelect" class="form-control" style="width:auto; min-width:210px;"></select>
+                  <button class="btn btn-success btn-sm" onclick="ReportModule.exportSingleTeamExcel()">
+                    <i data-lucide="download" width="15"></i> Export Selected Team (.xlsx)
+                  </button>
+                </div>
+              </div>
+
+              <!-- JSON Backup & Restore -->
+              <div class="surface-card mb-2" style="padding:1.4rem;">
+                <h3 style="font-size:1.08rem; margin-bottom:0.4rem;">Full JSON Snapshot Backup & Restore</h3>
+                <p class="text-muted text-sm mb-2">
+                  Save a complete JSON snapshot of games, teams, allocations, and history for safe offline archival or transfer.
+                </p>
+                <div class="flex-center">
+                  <button class="btn btn-secondary" onclick="BackupModule.exportJSON()">
+                    <i data-lucide="download-cloud" width="16"></i> Export Full JSON Backup
+                  </button>
+                  <label class="btn btn-secondary" style="cursor:pointer;">
+                    <i data-lucide="upload-cloud" width="16"></i> Import JSON Backup
+                    <input type="file" accept=".json" style="display:none;" onchange="BackupModule.importJSON(event)" />
+                  </label>
+                  <button class="btn btn-danger" onclick="BackupModule.promptFactoryReset()">
+                    <i data-lucide="rotate-ccw" width="16"></i> Reset All Application Data
+                  </button>
+                </div>
+              </div>
+
+              <!-- Team-Wise Summary Table -->
+              <div class="surface-card" style="padding:1.4rem;">
+                <h3 style="font-size:1.08rem; margin-bottom:0.85rem;">Team-Wise Allocation Summary</h3>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Team Number</th>
+                        <th>Team Name</th>
+                        <th>Status</th>
+                        <th>Allocated Games</th>
+                        <th>Share of Catalog</th>
+                        <th style="text-align:right;">Quick Export</th>
+                      </tr>
+                    </thead>
+                    <tbody id="reportTeamSummaryBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========================================================================
+       MODALS (GAME DETAILS, ADD/EDIT GAME, TEAM FORM, CONFIRMATION)
+       ======================================================================== -->
+
+  <!-- 1. Game Details Modal -->
+  <div id="gameDetailModal" class="modal-backdrop" onclick="ModalUI.handleBackdropClick(event, 'gameDetailModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <div class="flex-center mb-1" id="modalGameBadges"></div>
+          <h2 id="modalGameTitle" style="font-size:1.45rem;">Game Title</h2>
+        </div>
+        <button class="modal-close" onclick="ModalUI.close('gameDetailModal')" aria-label="Close">
+          <i data-lucide="x" width="18"></i>
+        </button>
+      </div>
+      <div id="modalGameAdminTeamBox" class="alert-banner alert-info mb-2" style="display:none;"></div>
+      <div>
+        <div class="text-xs text-muted uppercase font-semibold mb-1">Detailed Concept & Explanation</div>
+        <p id="modalGameExplanation" style="color:var(--text-primary); white-space:pre-line; line-height:1.65;"></p>
+      </div>
+      <div class="flex-between mt-3 pt-2" style="border-top:1px solid var(--border-subtle);">
+        <span class="text-xs text-muted">Press <kbd>ESC</kbd> or click outside to close</span>
+        <button class="btn btn-secondary btn-sm" onclick="ModalUI.close('gameDetailModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Add / Edit Game Modal -->
+  <div id="gameFormModal" class="modal-backdrop" onclick="ModalUI.handleBackdropClick(event, 'gameFormModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="gameFormModalTitle" style="font-size:1.35rem;">Add New Game</h2>
+        <button class="modal-close" onclick="ModalUI.close('gameFormModal')"><i data-lucide="x" width="18"></i></button>
+      </div>
+      <form onsubmit="GameManager.saveGame(event)">
+        <input type="hidden" id="editGameOriginalId" />
+        <div class="grid-2 mb-2">
+          <div class="form-group">
+            <label class="form-label">Game ID *</label>
+            <input type="text" id="fieldGameId" class="form-control" placeholder="e.g., G001" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <input type="text" id="fieldGameCategory" class="form-control" placeholder="e.g., Strategy, Action, Puzzle" />
+          </div>
+        </div>
+        <div class="form-group mb-2">
+          <label class="form-label">Game Title *</label>
+          <input type="text" id="fieldGameTitle" class="form-control" placeholder="Enter game title" required />
+        </div>
+        <div class="form-group mb-2">
+          <label class="form-label">Theme *</label>
+          <input type="text" id="fieldGameTheme" class="form-control" placeholder="e.g., Cyberpunk, Sci-Fi, Mystery" required />
+        </div>
+        <div class="form-group mb-3">
+          <label class="form-label">Detailed Explanation *</label>
+          <textarea id="fieldGameExplanation" class="form-control" placeholder="Full game concept, mechanics, and goals..." required></textarea>
+        </div>
+        <div class="flex-between">
+          <button type="button" class="btn btn-secondary" onclick="ModalUI.close('gameFormModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Game Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Add / Edit Team Modal -->
+  <div id="teamFormModal" class="modal-backdrop" onclick="ModalUI.handleBackdropClick(event, 'teamFormModal')">
+    <div class="modal-card" style="max-width:480px;">
+      <div class="modal-header">
+        <h2 id="teamFormModalTitle" style="font-size:1.35rem;">Add Team</h2>
+        <button class="modal-close" onclick="ModalUI.close('teamFormModal')"><i data-lucide="x" width="18"></i></button>
+      </div>
+      <form onsubmit="TeamManager.saveTeam(event)">
+        <input type="hidden" id="editTeamOriginalNumber" />
+        <div class="form-group mb-2">
+          <label class="form-label">Team Number *</label>
+          <input type="text" id="fieldTeamNumber" class="form-control" placeholder="e.g., 1, 25, T-04" required />
+        </div>
+        <div class="form-group mb-2">
+          <label class="form-label">Team Name *</label>
+          <input type="text" id="fieldTeamName" class="form-control" placeholder="e.g., Team 25 or Nova Strikers" required />
+        </div>
+        <div class="form-group mb-3">
+          <label class="form-label">Status</label>
+          <select id="fieldTeamStatus" class="form-control">
+            <option value="active">Active (Eligible for Game Allocation)</option>
+            <option value="inactive">Inactive (Excluded from Auto-Allocation)</option>
+          </select>
+        </div>
+        <div class="flex-between">
+          <button type="button" class="btn btn-secondary" onclick="ModalUI.close('teamFormModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Team</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Bulk Create Teams Modal -->
+  <div id="bulkTeamModal" class="modal-backdrop" onclick="ModalUI.handleBackdropClick(event, 'bulkTeamModal')">
+    <div class="modal-card" style="max-width:460px;">
+      <div class="modal-header">
+        <h2 style="font-size:1.35rem;">Bulk Generate Teams</h2>
+        <button class="modal-close" onclick="ModalUI.close('bulkTeamModal')"><i data-lucide="x" width="18"></i></button>
+      </div>
+      <form onsubmit="TeamManager.executeBulkCreate(event)">
+        <p class="text-muted text-sm mb-2">Quickly generate numbered teams (skips any existing team numbers).</p>
+        <div class="grid-2 mb-3">
+          <div class="form-group">
+            <label class="form-label">Start Number</label>
+            <input type="number" id="bulkTeamStart" class="form-control" value="1" min="1" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">End Number</label>
+            <input type="number" id="bulkTeamEnd" class="form-control" value="50" min="1" max="1000" required />
+          </div>
+        </div>
+        <div class="flex-between">
+          <button type="button" class="btn btn-secondary" onclick="ModalUI.close('bulkTeamModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Generate Teams</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Universal Confirmation Modal -->
+  <div id="confirmModal" class="modal-backdrop" onclick="ModalUI.handleBackdropClick(event, 'confirmModal')">
+    <div class="modal-card" style="max-width:460px;">
+      <div class="modal-header">
+        <h2 id="confirmModalTitle" style="font-size:1.3rem;">Confirm Action</h2>
+        <button class="modal-close" onclick="ModalUI.close('confirmModal')"><i data-lucide="x" width="18"></i></button>
+      </div>
+      <p id="confirmModalMessage" class="text-muted text-sm mb-3"></p>
+      <div class="flex-between">
+        <button class="btn btn-secondary" onclick="ModalUI.close('confirmModal')">Cancel</button>
+        <button id="confirmModalActionBtn" class="btn btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ========================================================================
+       APPLICATION JAVASCRIPT ARCHITECTURE
+       ======================================================================== -->
+  <script>
+    'use strict';
+
+    /* ========================================================================
+       MODULE 1: STORAGE & STATE MANAGEMENT
+       ======================================================================== */
+    const StorageKeys = {
+      GAMES: 'gamehub_games_v1',
+      TEAMS: 'gamehub_teams_v1',
+      ALLOCATIONS: 'gamehub_allocations_v1',
+      ADMIN_AUTH: 'gamehub_admin_demo_auth_v1',
+      SESSION: 'gamehub_admin_session_v1',
+      ALLOC_HISTORY: 'gamehub_alloc_history_v1',
+      IMPORT_HISTORY: 'gamehub_import_history_v1'
+    };
+
+    const Store = {
+      games: [],
+      teams: [],
+      allocations: [],
+      allocHistory: [],
+      importHistory: [],
+
+      // O(1) lookup maps rebuilt on load/mutation for fast 1,750+ record operations
+      gameById: new Map(),
+      allocationByGameId: new Map(),
+      allocationsByTeam: new Map(),
+
+      init() {
+        this.games = this.readJSON(StorageKeys.GAMES, []);
+        this.teams = this.readJSON(StorageKeys.TEAMS, []);
+        this.allocations = this.readJSON(StorageKeys.ALLOCATIONS, []);
+        this.allocHistory = this.readJSON(StorageKeys.ALLOC_HISTORY, []);
+        this.importHistory = this.readJSON(StorageKeys.IMPORT_HISTORY, []);
+        this.rebuildIndexes();
+      },
+
+      readJSON(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          const parsed = JSON.parse(raw);
+          return Array.isArray(fallback) && !Array.isArray(parsed) ? fallback : parsed;
+        } catch (err) {
+          console.error(`Failed reading ${key}:`, err);
+          return fallback;
+        }
+      },
+
+      writeJSON(key, value) {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch (err) {
+          Toast.show('Storage quota exceeded or blocked by browser.', 'error');
+          console.error(`Failed writing ${key}:`, err);
+        }
+      },
+
+      rebuildIndexes() {
+        this.gameById.clear();
+        for (const g of this.games) {
+          this.gameById.set(String(g.gameId).trim(), g);
+        }
+
+        // Enforce invariant: 1 gameId -> at most 1 allocation
+        const validAllocations = [];
+        const seenGames = new Set();
+        this.allocationByGameId.clear();
+        this.allocationsByTeam.clear();
+
+        for (const a of this.allocations) {
+          const gid = String(a.gameId).trim();
+          const tnum = String(a.teamNumber).trim();
+          if (!this.gameById.has(gid) || seenGames.has(gid)) continue;
+          seenGames.add(gid);
+          const cleanAlloc = { gameId: gid, teamNumber: tnum, allocatedAt: a.allocatedAt || new Date().toISOString() };
+          validAllocations.push(cleanAlloc);
+          this.allocationByGameId.set(gid, cleanAlloc);
+          if (!this.allocationsByTeam.has(tnum)) this.allocationsByTeam.set(tnum, []);
+          this.allocationsByTeam.get(tnum).push(cleanAlloc);
+        }
+
+        if (validAllocations.length !== this.allocations.length) {
+          this.allocations = validAllocations;
+          this.writeJSON(StorageKeys.ALLOCATIONS, this.allocations);
+        }
+      },
+
+      saveGames() {
+        this.writeJSON(StorageKeys.GAMES, this.games);
+        this.rebuildIndexes();
+      },
+
+      saveTeams() {
+        this.writeJSON(StorageKeys.TEAMS, this.teams);
+      },
+
+      saveAllocations() {
+        this.writeJSON(StorageKeys.ALLOCATIONS, this.allocations);
+        this.rebuildIndexes();
+      },
+
+      logAllocationHistory(action, details) {
+        this.allocHistory.unshift({
+          id: Date.now(),
+          timestamp: new Date().toISOString(),
+          action,
+          details
+        });
+        if (this.allocHistory.length > 50) this.allocHistory.length = 50;
+        this.writeJSON(StorageKeys.ALLOC_HISTORY, this.allocHistory);
+      },
+
+      logImportHistory(summary) {
+        this.importHistory.unshift({
+          id: Date.now(),
+          timestamp: new Date().toISOString(),
+          ...summary
+        });
+        if (this.importHistory.length > 30) this.importHistory.length = 30;
+        this.writeJSON(StorageKeys.IMPORT_HISTORY, this.importHistory);
+      }
+    };
+
+    /* ========================================================================
+       MODULE 2: UTILITIES, VALIDATION, TOASTS & MODALS
+       ======================================================================== */
+    const Utils = {
+      escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      },
+
+      debounce(fn, delay = 220) {
+        let timer = null;
+        return function (...args) {
+          clearTimeout(timer);
+          timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+      },
+
+      formatDate(iso) {
+        try {
+          return new Date(iso).toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+        } catch {
+          return iso;
+        }
+      },
+
+      // Non-blocking lightweight hash for local demo passcode verification
+      hashDemoPasscode(str) {
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0; i < str.length; i++) {
+          const ch = str.charCodeAt(i);
+          h1 = Math.imul(h1 ^ ch, 2654435761);
+          h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+      },
+
+      refreshIcons() {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      }
+    };
+
+    const Toast = {
+      show(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const el = document.createElement('div');
+        el.className = 'toast';
+        const colors = {
+          success: '#34d399',
+          error: '#fb7185',
+          warning: '#fbbf24',
+          info: '#60a5fa'
+        };
+        const icons = {
+          success: 'check-circle-2',
+          error: 'alert-octagon',
+          warning: 'alert-triangle',
+          info: 'info'
+        };
+        el.style.borderLeft = `4px solid ${colors[type] || colors.info}`;
+        el.innerHTML = `
+          <i data-lucide="${icons[type] || 'info'}" width="18" style="color:${colors[type] || colors.info}; flex-shrink:0; margin-top:2px;"></i>
+          <div style="flex:1; color:var(--text-primary);">${Utils.escapeHTML(message)}</div>
+        `;
+        container.appendChild(el);
+        Utils.refreshIcons();
+        setTimeout(() => {
+          el.style.opacity = '0';
+          el.style.transform = 'translateX(20px)';
+          el.style.transition = 'all 0.2s ease';
+          setTimeout(() => el.remove(), 220);
+        }, 3800);
+      }
+    };
+
+    const ModalUI = {
+      open(id) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.add('open');
+          Utils.refreshIcons();
+        }
+      },
+
+      close(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('open');
+      },
+
+      closeAll() {
+        document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
+      },
+
+      handleBackdropClick(event, id) {
+        if (event.target.id === id) {
+          this.close(id);
+        }
+      },
+
+      confirm({ title, message, confirmText = 'Confirm', danger = true, onConfirm }) {
+        document.getElementById('confirmModalTitle').textContent = title;
+        document.getElementById('confirmModalMessage').textContent = message;
+        const btn = document.getElementById('confirmModalActionBtn');
+        btn.textContent = confirmText;
+        btn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+        btn.onclick = () => {
+          this.close('confirmModal');
+          if (typeof onConfirm === 'function') onConfirm();
+        };
+        this.open('confirmModal');
+      },
+
+      openGameDetail(gameId, isAdminView = false) {
+        const game = Store.gameById.get(String(gameId));
+        if (!game) return;
+
+        document.getElementById('modalGameTitle').textContent = game.title;
+        document.getElementById('modalGameExplanation').textContent = game.explanation;
+
+        const badgesEl = document.getElementById('modalGameBadges');
+        badgesEl.innerHTML = `
+          <span class="badge badge-purple font-mono">${Utils.escapeHTML(game.gameId)}</span>
+          <span class="badge badge-blue">${Utils.escapeHTML(game.theme)}</span>
+          <span class="badge badge-cyan">${Utils.escapeHTML(game.category || 'General')}</span>
+        `;
+
+        const adminBox = document.getElementById('modalGameAdminTeamBox');
+        if (isAdminView && AuthModule.isAuthenticated()) {
+          const alloc = Store.allocationByGameId.get(String(game.gameId));
+          adminBox.style.display = 'flex';
+          if (alloc) {
+            const team = Store.teams.find(t => String(t.teamNumber) === String(alloc.teamNumber));
+            adminBox.innerHTML = `
+              <i data-lucide="user-check" width="18"></i>
+              <div>
+                <strong>Assigned Team:</strong> Team ${Utils.escapeHTML(alloc.teamNumber)}
+                ${team ? `(${Utils.escapeHTML(team.teamName)})` : ''}
+                &bull; <span class="text-xs">Allocated ${Utils.formatDate(alloc.allocatedAt)}</span>
+              </div>
+            `;
+          } else {
+            adminBox.innerHTML = `
+              <i data-lucide="circle-dashed" width="18"></i>
+              <div><strong>Allocation Status:</strong> Currently Unallocated</div>
+            `;
+          }
+        } else {
+          adminBox.style.display = 'none';
+        }
+
+        this.open('gameDetailModal');
+      }
+    };
+
+    /* ========================================================================
+       MODULE 3: NAVIGATION & APP CONTROLLER
+       ======================================================================== */
+    const App = {
+      currentSection: 'home',
+
+      init() {
+        Store.init();
+        AuthModule.init();
+        this.bindGlobalEvents();
+        this.updateHomeStats();
+        LibraryModule.init();
+        Utils.refreshIcons();
+      },
+
+      bindGlobalEvents() {
+        // Escape key closes any open modal
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') ModalUI.closeAll();
+        });
+
+        // Mobile hamburger menu
+        const toggle = document.getElementById('mobileMenuToggle');
+        const nav = document.getElementById('mainNavLinks');
+        toggle.addEventListener('click', () => {
+          nav.classList.toggle('open');
+        });
+      },
+
+      navigate(sectionId) {
+        // Close mobile nav if open
+        document.getElementById('mainNavLinks').classList.remove('open');
+
+        // Route guard for Admin Dashboard
+        if (sectionId === 'admin-dashboard' && !AuthModule.isAuthenticated()) {
+          Toast.show('Please sign in with your local demo administrator credentials.', 'warning');
+          sectionId = 'admin-login';
+        }
+
+        // If already authenticated and clicking admin-login, go directly to dashboard
+        if (sectionId === 'admin-login' && AuthModule.isAuthenticated()) {
+          sectionId = 'admin-dashboard';
+        }
+
+        this.currentSection = sectionId;
+
+        // Toggle active sections
+        document.querySelectorAll('.page-section').forEach(sec => {
+          sec.classList.toggle('active', sec.id === `section-${sectionId}`);
+        });
+
+        // Toggle active nav buttons
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.nav === sectionId);
+        });
+
+        // Lifecycle hooks per view
+        if (sectionId === 'home') {
+          this.updateHomeStats();
+        } else if (sectionId === 'library') {
+          LibraryModule.refreshFilters();
+          LibraryModule.render();
+        } else if (sectionId === 'admin-login') {
+          AuthModule.renderAuthForms();
+        } else if (sectionId === 'admin-dashboard') {
+          AdminUI.refreshAll();
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        Utils.refreshIcons();
+      },
+
+      updateHomeStats() {
+        document.getElementById('homeStatGames').textContent = Store.games.length.toLocaleString();
+        document.getElementById('homeStatTeams').textContent = Store.teams.length.toLocaleString();
+        document.getElementById('homeStatAllocated').textContent = Store.allocations.length.toLocaleString();
+
+        const banner = document.getElementById('homeOnboardingBanner');
+        banner.style.display = Store.games.length === 0 ? 'block' : 'none';
+      }
+    };
+
+    /* ========================================================================
+       MODULE 4: USER PORTAL (TEAM LOOKUP)
+       ======================================================================== */
+    const UserPortal = {
+      activeTeamNumber: null,
+      teamGames: [],
+
+      handleHeroLookup(event) {
+        event.preventDefault();
+        const val = document.getElementById('heroTeamInput').value.trim();
+        if (!val) return;
+        document.getElementById('lookupTeamInput').value = val;
+        App.navigate('lookup');
+        this.lookupTeam(val);
+      },
+
+      handleLookupSubmit(event) {
+        event.preventDefault();
+        const val = document.getElementById('lookupTeamInput').value.trim();
+        this.lookupTeam(val);
+      },
+
+      clearLookup() {
+        this.activeTeamNumber = null;
+        this.teamGames = [];
+        document.getElementById('lookupTeamInput').value = '';
+        document.getElementById('lookupResultArea').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon"><i data-lucide="crosshair" width="28"></i></div>
+            <h3>Awaiting Team Number</h3>
+            <p class="text-muted text-sm mt-1">Enter your team number above to validate your roster and load your assigned games.</p>
+          </div>
+        `;
+        Utils.refreshIcons();
+      },
+
+      lookupTeam(rawInput) {
+        const container = document.getElementById('lookupResultArea');
+        const query = String(rawInput || '').trim();
+
+        if (!query) {
+          Toast.show('Please enter a valid team number.', 'warning');
+          return;
+        }
+
+        // Case-insensitive match on teamNumber
+        const team = Store.teams.find(t => String(t.teamNumber).trim().toLowerCase() === query.toLowerCase());
+
+        if (!team) {
+          this.activeTeamNumber = null;
+          this.teamGames = [];
+          container.innerHTML = `
+            <div class="empty-state" style="border-color:rgba(244,63,94,0.4);">
+              <div class="empty-icon" style="background:rgba(244,63,94,0.15); color:#fb7185;">
+                <i data-lucide="shield-x" width="28"></i>
+              </div>
+              <h3>Team "${Utils.escapeHTML(query)}" Not Found</h3>
+              <p class="text-muted text-sm mt-1" style="max-width:480px; margin-inline:auto;">
+                No registered team matches that number. Please double-check your team number or contact the event administrator.
+              </p>
+            </div>
+          `;
+          Utils.refreshIcons();
+          return;
+        }
+
+        // Retrieve ONLY this team's allocated games
+        const teamAllocs = Store.allocationsByTeam.get(String(team.teamNumber)) || [];
+        const assignedGames = teamAllocs
+          .map(a => Store.gameById.get(String(a.gameId)))
+          .filter(Boolean);
+
+        this.activeTeamNumber = team.teamNumber;
+        this.teamGames = assignedGames;
+
+        const categories = [...new Set(assignedGames.map(g => g.category || 'General'))].sort();
+
+        container.innerHTML = `
+          <div class="surface-card mb-2" style="padding:1.4rem; border-color:rgba(139,92,246,0.4);">
+            <div class="flex-between">
+              <div>
+                <div class="flex-center mb-1">
+                  <span class="badge badge-purple">Team #${Utils.escapeHTML(team.teamNumber)}</span>
+                  <span class="badge ${team.status === 'active' ? 'badge-green' : 'badge-amber'}">
+                    ${team.status === 'active' ? 'Active Roster' : 'Inactive Team'}
+                  </span>
+                </div>
+                <h2 style="font-size:1.55rem;">${Utils.escapeHTML(team.teamName)}</h2>
+              </div>
+              <div style="text-align:right;">
+                <div class="stat-value" style="color:#c4b5fd;">${assignedGames.length}</div>
+                <div class="text-xs text-muted">Total Assigned Games</div>
+              </div>
+            </div>
+          </div>
+
+          ${assignedGames.length === 0 ? `
+            <div class="empty-state">
+              <div class="empty-icon"><i data-lucide="inbox" width="28"></i></div>
+              <h3>No Games Assigned Yet</h3>
+              <p class="text-muted text-sm mt-1">
+                Team ${Utils.escapeHTML(team.teamNumber)} is registered, but no games have been allocated to this team yet.
+              </p>
+            </div>
+          ` : `
+            <div class="surface-card filter-bar">
+              <div class="search-wrap">
+                <i data-lucide="search"></i>
+                <input type="text" id="teamGameSearch" class="form-control" placeholder="Search within Team ${Utils.escapeHTML(team.teamNumber)}'s games..." oninput="UserPortal.renderFilteredTeamGames()" />
+              </div>
+              <select id="teamGameCatFilter" class="form-control" style="width:auto;" onchange="UserPortal.renderFilteredTeamGames()">
+                <option value="ALL">All Categories (${categories.length})</option>
+                ${categories.map(c => `<option value="${Utils.escapeHTML(c)}">${Utils.escapeHTML(c)}</option>`).join('')}
+              </select>
+              <select id="teamGameSort" class="form-control" style="width:auto;" onchange="UserPortal.renderFilteredTeamGames()">
+                <option value="id-asc">Sort: Game ID</option>
+                <option value="title-asc">Sort: Title (A → Z)</option>
+                <option value="theme-asc">Sort: Theme (A → Z)</option>
+              </select>
+            </div>
+            <div id="teamGamesGrid" class="games-grid"></div>
+          `}
+        `;
+
+        if (assignedGames.length > 0) {
+          this.renderFilteredTeamGames();
+        }
+        Utils.refreshIcons();
+      },
+
+      renderFilteredTeamGames() {
+        const grid = document.getElementById('teamGamesGrid');
+        if (!grid) return;
+
+        const q = (document.getElementById('teamGameSearch')?.value || '').trim().toLowerCase();
+        const cat = document.getElementById('teamGameCatFilter')?.value || 'ALL';
+        const sort = document.getElementById('teamGameSort')?.value || 'id-asc';
+
+        let list = this.teamGames.filter(g => {
+          const gCat = g.category || 'General';
+          if (cat !== 'ALL' && gCat !== cat) return false;
+          if (!q) return true;
+          return (
+            String(g.gameId).toLowerCase().includes(q) ||
+            String(g.title).toLowerCase().includes(q) ||
+            String(g.theme).toLowerCase().includes(q) ||
+            String(g.explanation).toLowerCase().includes(q)
+          );
+        });
+
+        list.sort((a, b) => {
+          if (sort === 'title-asc') return String(a.title).localeCompare(String(b.title));
+          if (sort === 'theme-asc') return String(a.theme).localeCompare(String(b.theme));
+          return String(a.gameId).localeCompare(String(b.gameId), undefined, { numeric: true });
+        });
+
+        if (list.length === 0) {
+          grid.style.display = 'block';
+          grid.innerHTML = `<div class="empty-state"><p class="text-muted">No assigned games match your filter criteria.</p></div>`;
+          return;
+        }
+
+        grid.style.display = 'grid';
+        grid.innerHTML = list.map(g => `
+          <article class="game-card" onclick="ModalUI.openGameDetail('${Utils.escapeHTML(g.gameId)}', false)">
+            <div>
+              <div class="flex-between">
+                <span class="badge badge-purple font-mono">${Utils.escapeHTML(g.gameId)}</span>
+                <span class="badge badge-cyan">${Utils.escapeHTML(g.category || 'General')}</span>
+              </div>
+              <h3 class="game-card-title">${Utils.escapeHTML(g.title)}</h3>
+              <div class="text-xs mb-1" style="color:#93c5fd;">
+                <strong>Theme:</strong> ${Utils.escapeHTML(g.theme)}
+              </div>
+              <p class="game-card-desc">${Utils.escapeHTML(g.explanation)}</p>
+            </div>
+            <div class="flex-between pt-2" style="border-top:1px solid rgba(148,163,184,0.1);">
+              <span class="text-xs text-muted">Team #${Utils.escapeHTML(this.activeTeamNumber)} Exclusive</span>
+              <span class="text-xs" style="color:#c4b5fd; font-weight:600;">Read Full Concept &rarr;</span>
+            </div>
+          </article>
+        `).join('');
+      }
+    };
+
+    /* ========================================================================
+       MODULE 5: GAME LIBRARY (PAGINATED HIGH-PERFORMANCE CATALOG)
+       ======================================================================== */
+    const LibraryModule = {
+      currentPage: 1,
+
+      init() {
+        this.onSearchInput = Utils.debounce(() => this.resetAndRender(), 200);
+      },
+
+      refreshFilters() {
+        const select = document.getElementById('libCategoryFilter');
+        const current = select.value;
+        const cats = [...new Set(Store.games.map(g => g.category || 'General'))].sort();
+        select.innerHTML = `<option value="ALL">All Categories</option>` +
+          cats.map(c => `<option value="${Utils.escapeHTML(c)}">${Utils.escapeHTML(c)}</option>`).join('');
+        if (cats.includes(current)) select.value = current;
+      },
+
+      resetAndRender() {
+        this.currentPage = 1;
+        this.render();
+      },
+
+      getFilteredGames() {
+        const q = (document.getElementById('libSearchInput').value || '').trim().toLowerCase();
+        const cat = document.getElementById('libCategoryFilter').value;
+        const sort = document.getElementById('libSortSelect').value;
+
+        const filtered = Store.games.filter(g => {
+          const gCat = g.category || 'General';
+          if (cat !== 'ALL' && gCat !== cat) return false;
+          if (!q) return true;
+          return (
+            String(g.gameId).toLowerCase().includes(q) ||
+            String(g.title).toLowerCase().includes(q) ||
+            String(g.theme).toLowerCase().includes(q)
+          );
+        });
+
+        filtered.sort((a, b) => {
+          if (sort === 'title-asc') return String(a.title).localeCompare(String(b.title));
+          if (sort === 'title-desc') return String(b.title).localeCompare(String(a.title));
+          if (sort === 'theme-asc') return String(a.theme).localeCompare(String(b.theme));
+          return String(a.gameId).localeCompare(String(b.gameId), undefined, { numeric: true });
+        });
+
+        return filtered;
+      },
+
+      render() {
+        const container = document.getElementById('libraryGridContainer');
+        const pagBar = document.getElementById('libraryPagination');
+        const totalGames = Store.games.length;
+        const filtered = this.getFilteredGames();
+
+        document.getElementById('libTotalCount').textContent = totalGames.toLocaleString();
+        document.getElementById('libFilteredCount').textContent = filtered.length.toLocaleString();
+
+        if (totalGames === 0) {
+          pagBar.style.display = 'none';
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon"><i data-lucide="library" width="28"></i></div>
+              <h3>Game Library is Empty</h3>
+              <p class="text-muted text-sm mt-1">
+                No games have been imported yet. An administrator can import an Excel workbook from the Admin Dashboard.
+              </p>
+            </div>
+          `;
+          Utils.refreshIcons();
+          return;
+        }
+
+        if (filtered.length === 0) {
+          pagBar.style.display = 'none';
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon"><i data-lucide="search-x" width="28"></i></div>
+              <h3>No Matching Games</h3>
+              <p class="text-muted text-sm mt-1">Try adjusting your search query or category filter.</p>
+            </div>
+          `;
+          Utils.refreshIcons();
+          return;
+        }
+
+        const pageSize = parseInt(document.getElementById('libPageSize').value, 10) || 24;
+        const totalPages = Math.ceil(filtered.length / pageSize);
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+
+        const startIdx = (this.currentPage - 1) * pageSize;
+        const slice = filtered.slice(startIdx, startIdx + pageSize);
+
+        // Render only current page slice (keeps DOM ultra-fast even with 1,750+ games)
+        container.innerHTML = `<div class="games-grid">` + slice.map(g => `
+          <article class="game-card" onclick="ModalUI.openGameDetail('${Utils.escapeHTML(g.gameId)}', false)">
+            <div>
+              <div class="flex-between">
+                <span class="badge badge-purple font-mono">${Utils.escapeHTML(g.gameId)}</span>
+                <span class="badge badge-cyan">${Utils.escapeHTML(g.category || 'General')}</span>
+              </div>
+              <h3 class="game-card-title">${Utils.escapeHTML(g.title)}</h3>
+              <div class="text-xs mb-1" style="color:#93c5fd;">
+                <strong>Theme:</strong> ${Utils.escapeHTML(g.theme)}
+              </div>
+              <p class="game-card-desc">${Utils.escapeHTML(g.explanation)}</p>
+            </div>
+            <div class="flex-between pt-2" style="border-top:1px solid rgba(148,163,184,0.1);">
+              <span class="text-xs text-muted">Click for full details</span>
+              <span class="text-xs" style="color:#c4b5fd; font-weight:600;">Inspect &rarr;</span>
+            </div>
+          </article>
+        `).join('') + `</div>`;
+
+        pagBar.style.display = 'flex';
+        pagBar.innerHTML = `
+          <div class="text-sm text-muted">
+            Showing <strong>${startIdx + 1}</strong>–<strong>${Math.min(startIdx + pageSize, filtered.length)}</strong> of <strong>${filtered.length.toLocaleString()}</strong> games
+          </div>
+          <div class="flex-center">
+            <button class="btn btn-secondary btn-sm" ${this.currentPage <= 1 ? 'disabled' : ''} onclick="LibraryModule.goToPage(${this.currentPage - 1})">
+              &larr; Prev
+            </button>
+            <span class="text-sm">Page <strong>${this.currentPage}</strong> of <strong>${totalPages}</strong></span>
+            <button class="btn btn-secondary btn-sm" ${this.currentPage >= totalPages ? 'disabled' : ''} onclick="LibraryModule.goToPage(${this.currentPage + 1})">
+              Next &rarr;
+            </button>
+          </div>
+        `;
+      },
+
+      goToPage(page) {
+        this.currentPage = page;
+        this.render();
+        document.getElementById('section-library').scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+
+    /* ========================================================================
+       MODULE 6: LOCAL DEMO ADMIN AUTHENTICATION & SESSION TIMEOUT
+       ======================================================================== */
+    const AuthModule = {
+      sessionInterval: null,
+
+      init() {
+        this.updateNavState();
+        this.startSessionWatcher();
+      },
+
+      getStoredAdmin() {
+        return Store.readJSON(StorageKeys.ADMIN_AUTH, null);
+      },
+
+      getSession() {
+        return Store.readJSON(StorageKeys.SESSION, null);
+      },
+
+      isAuthenticated() {
+        const session = this.getSession();
+        if (!session || !session.expiresAt) return false;
+        if (Date.now() > session.expiresAt) {
+          this.clearSession();
+          return false;
+        }
+        return true;
+      },
+
+      renderAuthForms() {
+        const admin = this.getStoredAdmin();
+        const setupForm = document.getElementById('adminSetupForm');
+        const loginForm = document.getElementById('adminLoginForm');
+        const title = document.getElementById('authCardTitle');
+
+        if (!admin) {
+          title.textContent = 'Initialize Local Demo Admin';
+          setupForm.style.display = 'block';
+          loginForm.style.display = 'none';
+        } else {
+          title.textContent = 'Admin Demo Sign In';
+          setupForm.style.display = 'none';
+          loginForm.style.display = 'block';
+        }
+      },
+
+      handleSetup(event) {
+        event.preventDefault();
+        const username = document.getElementById('setupUsername').value.trim();
+        const password = document.getElementById('setupPassword').value;
+        const timeoutMinutes = parseInt(document.getElementById('setupTimeout').value, 10) || 30;
+
+        if (username.length < 3 || password.length < 6) {
+          Toast.show('Username (min 3) and passcode (min 6) required.', 'error');
+          return;
+        }
+
+        const adminConfig = {
+          username,
+          passHash: Utils.hashDemoPasscode(password),
+          timeoutMinutes,
+          createdAt: new Date().toISOString()
+        };
+
+        Store.writeJSON(StorageKeys.ADMIN_AUTH, adminConfig);
+        this.createSession(adminConfig);
+        Toast.show('Local demo admin credentials saved.', 'success');
+        App.navigate('admin-dashboard');
+      },
+
+      handleLogin(event) {
+        event.preventDefault();
+        const admin = this.getStoredAdmin();
+        if (!admin) {
+          this.renderAuthForms();
+          return;
+        }
+
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+
+        if (username === admin.username && Utils.hashDemoPasscode(password) === admin.passHash) {
+          document.getElementById('loginPassword').value = '';
+          this.createSession(admin);
+          Toast.show(`Welcome back, ${admin.username}!`, 'success');
+          App.navigate('admin-dashboard');
+        } else {
+          Toast.show('Invalid local demo username or passcode.', 'error');
+        }
+      },
+
+      createSession(admin) {
+        const ttlMs = (admin.timeoutMinutes || 30) * 60 * 1000;
+        const session = {
+          username: admin.username,
+          expiresAt: Date.now() + ttlMs
+        };
+        Store.writeJSON(StorageKeys.SESSION, session);
+        this.updateNavState();
+      },
+
+      clearSession() {
+        localStorage.removeItem(StorageKeys.SESSION);
+        this.updateNavState();
+      },
+
+      logout() {
+        this.clearSession();
+        Toast.show('Administrator session closed.', 'info');
+        App.navigate('admin-login');
+      },
+
+      promptResetCredentials() {
+        ModalUI.confirm({
+          title: 'Reset Local Demo Admin Credentials?',
+          message: 'This will remove your local demo username and passcode so you can set up a new one. Your games, teams, and allocations will NOT be deleted.',
+          confirmText: 'Reset Credentials',
+          danger: true,
+          onConfirm: () => {
+            localStorage.removeItem(StorageKeys.ADMIN_AUTH);
+            this.clearSession();
+            this.renderAuthForms();
+            Toast.show('Demo admin credentials cleared. Create new credentials below.', 'info');
+          }
+        });
+      },
+
+      updateNavState() {
+        const authed = this.isAuthenticated();
+        document.getElementById('navLoginBtn').style.display = authed ? 'none' : 'inline-flex';
+        document.getElementById('navDashboardBtn').style.display = authed ? 'inline-flex' : 'none';
+        if (authed) {
+          const session = this.getSession();
+          document.getElementById('adminSessionUser').textContent = session.username;
+        }
+      },
+
+      startSessionWatcher() {
+        // Refresh session expiry on admin interaction
+        ['click', 'keydown'].forEach(evt => {
+          document.addEventListener(evt, () => {
+            if (App.currentSection === 'admin-dashboard' && this.isAuthenticated()) {
+              const admin = this.getStoredAdmin();
+              if (admin) this.createSession(admin);
+            }
+          }, { passive: true });
+        });
+
+        this.sessionInterval = setInterval(() => {
+          const session = this.getSession();
+          const badge = document.getElementById('sessionTimerBadge');
+          if (!session) return;
+          const remainingMs = session.expiresAt - Date.now();
+          if (remainingMs <= 0) {
+            this.clearSession();
+            if (App.currentSection === 'admin-dashboard') {
+              Toast.show('Admin session timed out due to inactivity.', 'warning');
+              App.navigate('admin-login');
+            }
+          } else if (badge) {
+            const mins = Math.ceil(remainingMs / 60000);
+            badge.textContent = `${mins}m left`;
+          }
+        }, 10000);
+      }
+    };
+
+    /* ========================================================================
+       MODULE 7: ADMIN DASHBOARD CONTROLLER & CHARTS
+       ======================================================================== */
+    const AdminUI = {
+      activeTab: 'overview',
+      pieChart: null,
+      barChart: null,
+
+      switchTab(tabId) {
+        this.activeTab = tabId;
+        document.querySelectorAll('.sidebar-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tab === tabId);
+        });
+        document.querySelectorAll('.admin-tab').forEach(panel => {
+          panel.classList.toggle('active', panel.id === `admin-tab-${tabId}`);
+        });
+
+        if (tabId === 'overview') this.renderOverview();
+        if (tabId === 'games') GameManager.initAndRender();
+        if (tabId === 'import') ExcelModule.renderHistory();
+        if (tabId === 'teams') TeamManager.renderTeams();
+        if (tabId === 'allocation') AllocationEngine.refreshUI();
+        if (tabId === 'reports') ReportModule.renderReports();
+
+        Utils.refreshIcons();
+      },
+
+      refreshAll() {
+        this.switchTab(this.activeTab);
+      },
+
+      renderOverview() {
+        const totalGames = Store.games.length;
+        const totalTeams = Store.teams.length;
+        const activeTeams = Store.teams.filter(t => t.status === 'active').length;
+        const allocated = Store.allocations.length;
+        const unallocated = Math.max(0, totalGames - allocated);
+        const avgPerTeam = activeTeams > 0 ? (allocated / activeTeams).toFixed(1) : '0.0';
+        const pct = totalGames > 0 ? Math.round((allocated / totalGames) * 100) : 0;
+
+        document.getElementById('kpiTotalGames').textContent = totalGames.toLocaleString();
+        document.getElementById('kpiTotalTeams').textContent = `${activeTeams} / ${totalTeams}`;
+        document.getElementById('kpiAllocatedGames').textContent = allocated.toLocaleString();
+        document.getElementById('kpiUnallocatedGames').textContent = unallocated.toLocaleString();
+        document.getElementById('kpiAvgGames').textContent = avgPerTeam;
+        document.getElementById('kpiAllocPercent').textContent = `${pct}%`;
+
+        this.renderCharts(allocated, unallocated);
+      },
+
+      renderCharts(allocated, unallocated) {
+        if (!window.Chart) return;
+
+        // 1. Doughnut Chart
+        const pieCtx = document.getElementById('allocationPieChart');
+        if (this.pieChart) this.pieChart.destroy();
+        this.pieChart = new Chart(pieCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Allocated Games', 'Unallocated Games'],
+            datasets: [{
+              data: [allocated, unallocated],
+              backgroundColor: ['#8b5cf6', '#1e293b'],
+              borderColor: ['#a78bfa', '#334155'],
+              borderWidth: 1.5
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: '#cbd5e1', font: { family: 'Inter' } } }
+            }
+          }
+        });
+
+        // 2. Bar Chart (Games per Team - Top 25 sorted by Team Number)
+        const sortedTeams = [...Store.teams]
+          .sort((a, b) => String(a.teamNumber).localeCompare(String(b.teamNumber), undefined, { numeric: true }))
+          .slice(0, 25);
+
+        const labels = sortedTeams.map(t => `T-${t.teamNumber}`);
+        const counts = sortedTeams.map(t => (Store.allocationsByTeam.get(String(t.teamNumber)) || []).length);
+
+        const barCtx = document.getElementById('teamBarChart');
+        if (this.barChart) this.barChart.destroy();
+        this.barChart = new Chart(barCtx, {
+          type: 'bar',
+          data: {
+            labels: labels.length ? labels : ['No Teams'],
+            datasets: [{
+              label: 'Assigned Games',
+              data: counts.length ? counts : [0],
+              backgroundColor: 'rgba(59, 130, 246, 0.72)',
+              borderColor: '#60a5fa',
+              borderWidth: 1,
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+              y: { beginAtZero: true, ticks: { color: '#94a3b8', precision: 0 }, grid: { color: 'rgba(148,163,184,0.1)' } }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+    };
+
+    /* ========================================================================
+       MODULE 8: GAME MANAGEMENT (CRUD, SEARCH, FILTER, PAGINATION)
+       ======================================================================== */
+    const GameManager = {
+      currentPage: 1,
+      pageSize: 25,
+      onSearch: null,
+
+      initAndRender() {
+        if (!this.onSearch) {
+          this.onSearch = Utils.debounce(() => this.resetAndRender(), 200);
+        }
+        const catSelect = document.getElementById('adminGameCatFilter');
+        const current = catSelect.value;
+        const cats = [...new Set(Store.games.map(g => g.category || 'General'))].sort();
+        catSelect.innerHTML = `<option value="ALL">All Categories</option>` +
+          cats.map(c => `<option value="${Utils.escapeHTML(c)}">${Utils.escapeHTML(c)}</option>`).join('');
+        if (cats.includes(current)) catSelect.value = current;
+
+        this.renderTable();
+      },
+
+      resetAndRender() {
+        this.currentPage = 1;
+        this.renderTable();
+      },
+
+      renderTable() {
+        const tbody = document.getElementById('adminGamesTableBody');
+        const pagEl = document.getElementById('adminGamesPagination');
+        const q = (document.getElementById('adminGameSearch').value || '').trim().toLowerCase();
+        const statusFilter = document.getElementById('adminGameStatusFilter').value;
+        const catFilter = document.getElementById('adminGameCatFilter').value;
+
+        const filtered = Store.games.filter(g => {
+          const isAlloc = Store.allocationByGameId.has(String(g.gameId));
+          if (statusFilter === 'ALLOCATED' && !isAlloc) return false;
+          if (statusFilter === 'UNALLOCATED' && isAlloc) return false;
+          const gCat = g.category || 'General';
+          if (catFilter !== 'ALL' && gCat !== catFilter) return false;
+          if (!q) return true;
+          return (
+            String(g.gameId).toLowerCase().includes(q) ||
+            String(g.title).toLowerCase().includes(q) ||
+            String(g.theme).toLowerCase().includes(q)
+          );
+        });
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">No games found matching your criteria.</td></tr>`;
+          pagEl.innerHTML = '';
+          return;
+        }
+
+        const totalPages = Math.ceil(filtered.length / this.pageSize);
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        const start = (this.currentPage - 1) * this.pageSize;
+        const slice = filtered.slice(start, start + this.pageSize);
+
+        tbody.innerHTML = slice.map(g => {
+          const alloc = Store.allocationByGameId.get(String(g.gameId));
+          return `
+            <tr>
+              <td class="font-mono"><strong>${Utils.escapeHTML(g.gameId)}</strong></td>
+              <td>${Utils.escapeHTML(g.title)}</td>
+              <td><span class="badge badge-blue">${Utils.escapeHTML(g.theme)}</span></td>
+              <td><span class="badge badge-slate">${Utils.escapeHTML(g.category || 'General')}</span></td>
+              <td>
+                ${alloc
+                  ? `<span class="badge badge-green">Team #${Utils.escapeHTML(alloc.teamNumber)}</span>`
+                  : `<span class="badge badge-amber">Unallocated</span>`
+                }
+              </td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button class="btn btn-secondary btn-sm" title="Inspect Details" onclick="ModalUI.openGameDetail('${Utils.escapeHTML(g.gameId)}', true)">
+                  <i data-lucide="eye" width="14"></i>
+                </button>
+                <button class="btn btn-secondary btn-sm" title="Edit Game" onclick="GameManager.openGameFormModal('${Utils.escapeHTML(g.gameId)}')">
+                  <i data-lucide="edit-3" width="14"></i>
+                </button>
+                <button class="btn btn-danger btn-sm" title="Delete Game" onclick="GameManager.promptDeleteGame('${Utils.escapeHTML(g.gameId)}')">
+                  <i data-lucide="trash-2" width="14"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        pagEl.innerHTML = `
+          <span class="text-muted">Showing ${start + 1}–${Math.min(start + this.pageSize, filtered.length)} of ${filtered.length.toLocaleString()}</span>
+          <div class="flex-center">
+            <button class="btn btn-secondary btn-sm" ${this.currentPage <= 1 ? 'disabled' : ''} onclick="GameManager.goToPage(${this.currentPage - 1})">Prev</button>
+            <span>Page ${this.currentPage} / ${totalPages}</span>
+            <button class="btn btn-secondary btn-sm" ${this.currentPage >= totalPages ? 'disabled' : ''} onclick="GameManager.goToPage(${this.currentPage + 1})">Next</button>
+          </div>
+        `;
+        Utils.refreshIcons();
+      },
+
+      goToPage(p) {
+        this.currentPage = p;
+        this.renderTable();
+      },
+
+      openGameFormModal(gameId = null) {
+        const titleEl = document.getElementById('gameFormModalTitle');
+        const origInput = document.getElementById('editGameOriginalId');
+        const idInput = document.getElementById('fieldGameId');
+        const catInput = document.getElementById('fieldGameCategory');
+        const nameInput = document.getElementById('fieldGameTitle');
+        const themeInput = document.getElementById('fieldGameTheme');
+        const expInput = document.getElementById('fieldGameExplanation');
+
+        if (gameId) {
+          const game = Store.gameById.get(String(gameId));
+          if (!game) return;
+          titleEl.textContent = `Edit Game (${game.gameId})`;
+          origInput.value = game.gameId;
+          idInput.value = game.gameId;
+          catInput.value = game.category || 'General';
+          nameInput.value = game.title;
+          themeInput.value = game.theme;
+          expInput.value = game.explanation;
+        } else {
+          titleEl.textContent = 'Add New Game';
+          origInput.value = '';
+          idInput.value = '';
+          catInput.value = 'General';
+          nameInput.value = '';
+          themeInput.value = '';
+          expInput.value = '';
+        }
+
+        ModalUI.open('gameFormModal');
+      },
+
+      saveGame(event) {
+        event.preventDefault();
+        const origId = document.getElementById('editGameOriginalId').value.trim();
+        const gameId = document.getElementById('fieldGameId').value.trim();
+        const category = document.getElementById('fieldGameCategory').value.trim() || 'General';
+        const title = document.getElementById('fieldGameTitle').value.trim();
+        const theme = document.getElementById('fieldGameTheme').value.trim();
+        const explanation = document.getElementById('fieldGameExplanation').value.trim();
+
+        if (!gameId || !title || !theme || !explanation) {
+          Toast.show('Game ID, Title, Theme, and Explanation are required.', 'error');
+          return;
+        }
+
+        // Prevent duplicate Game ID
+        if (gameId !== origId && Store.gameById.has(gameId)) {
+          Toast.show(`Game ID "${gameId}" already exists. Use a unique Game ID.`, 'error');
+          return;
+        }
+
+        if (origId) {
+          const idx = Store.games.findIndex(g => String(g.gameId) === origId);
+          if (idx !== -1) {
+            Store.games[idx] = { gameId, title, theme, explanation, category };
+            // Update allocation reference if Game ID changed
+            if (origId !== gameId) {
+              Store.allocations.forEach(a => {
+                if (String(a.gameId) === origId) a.gameId = gameId;
+              });
+              Store.saveAllocations();
+            }
+          }
+          Toast.show(`Game "${gameId}" updated.`, 'success');
+        } else {
+          Store.games.push({ gameId, title, theme, explanation, category });
+          Toast.show(`Game "${gameId}" added to catalog.`, 'success');
+        }
+
+        Store.saveGames();
+        App.updateHomeStats();
+        ModalUI.close('gameFormModal');
+        this.initAndRender();
+      },
+
+      promptDeleteGame(gameId) {
+        const alloc = Store.allocationByGameId.get(String(gameId));
+        ModalUI.confirm({
+          title: `Delete Game ${gameId}?`,
+          message: alloc
+            ? `This game is currently assigned to Team #${alloc.teamNumber}. Deleting it will permanently remove the game and its team allocation.`
+            : `Are you sure you want to permanently delete game "${gameId}" from the catalog?`,
+          confirmText: 'Delete Game',
+          danger: true,
+          onConfirm: () => {
+            Store.games = Store.games.filter(g => String(g.gameId) !== String(gameId));
+            Store.allocations = Store.allocations.filter(a => String(a.gameId) !== String(gameId));
+            Store.saveGames();
+            Store.saveAllocations();
+            App.updateHomeStats();
+            Toast.show(`Game "${gameId}" deleted.`, 'info');
+            this.initAndRender();
+          }
+        });
+      }
+    };
+
+    /* ========================================================================
+       MODULE 9: EXCEL IMPORT & TEMPLATE GENERATOR (ExcelJS)
+       ======================================================================== */
+    const ExcelModule = {
+      workbook: null,
+      headers: [],
+      rawRows: [],
+      validRecords: [],
+      invalidRecords: [],
+
+      async downloadSampleTemplate() {
+        if (!window.ExcelJS) {
+          Toast.show('ExcelJS library failed to load from CDN.', 'error');
+          return;
+        }
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Games_Catalog');
+        ws.columns = [
+          { header: 'Game ID', key: 'gameId', width: 14 },
+          { header: 'Game Title', key: 'title', width: 32 },
+          { header: 'Theme', key: 'theme', width: 22 },
+          { header: 'Explanation', key: 'explanation', width: 65 },
+          { header: 'Category', key: 'category', width: 18 }
+        ];
+        ws.getRow(1).font = { bold: true };
+        ws.addRow({
+          gameId: 'G001',
+          title: 'Chrono Rift Defenders',
+          theme: 'Time-Travel Sci-Fi',
+          explanation: 'Players coordinate across three eras simultaneously to stabilize temporal anomalies before timeline collapse.',
+          category: 'Strategy'
+        });
+        ws.addRow({
+          gameId: 'G002',
+          title: 'Neon Synth Runner',
+          theme: 'Cyberpunk',
+          explanation: 'High-velocity rhythm parkour across rooftop megastructures where every jump syncs with dynamic synthwave beats.',
+          category: 'Action'
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        this.triggerDownload(buffer, 'GameHub_Import_Template.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        Toast.show('Sample Excel template downloaded.', 'success');
+      },
+
+      triggerDownload(buffer, filename, mimeType) {
+        const blob = new Blob([buffer], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      },
+
+      async handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!window.ExcelJS) {
+          Toast.show('ExcelJS CDN not available. Check your internet connection.', 'error');
+          return;
+        }
+
+        const statusEl = document.getElementById('excelUploadStatus');
+        statusEl.innerHTML = `<span class="spinner"></span> Parsing workbook "${Utils.escapeHTML(file.name)}"...`;
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(arrayBuffer);
+
+          if (!wb.worksheets || wb.worksheets.length === 0) {
+            throw new Error('No worksheets found in workbook.');
+          }
+
+          this.workbook = wb;
+          const sheetSelect = document.getElementById('excelSheetSelect');
+          sheetSelect.innerHTML = wb.worksheets.map((ws, idx) =>
+            `<option value="${idx}">Sheet: ${Utils.escapeHTML(ws.name)}</option>`
+          ).join('');
+
+          document.getElementById('excelMappingPanel').style.display = 'block';
+          statusEl.textContent = `Loaded "${file.name}" (${wb.worksheets.length} sheet${wb.worksheets.length > 1 ? 's' : ''}).`;
+          this.onSheetChange();
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = 'Failed to parse Excel file.';
+          Toast.show(`Excel Read Error: ${err.message}`, 'error');
+        }
+      },
+
+      onSheetChange() {
+        const sheetIdx = parseInt(document.getElementById('excelSheetSelect').value, 10) || 0;
+        const ws = this.workbook.worksheets[sheetIdx];
+        if (!ws) return;
+
+        // Extract header row (row 1)
+        const headerRow = ws.getRow(1);
+        const headers = [];
+        headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const text = this.extractCellText(cell).trim();
+          headers.push({ colNumber, label: text || `Column ${colNumber}` });
+        });
+
+        this.headers = headers;
+
+        // Read all data rows starting at row 2
+        const rows = [];
+        ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+          if (rowNumber === 1) return;
+          const rowObj = { __rowNumber: rowNumber };
+          let hasAnyValue = false;
+          for (const h of headers) {
+            const val = this.extractCellText(row.getCell(h.colNumber)).trim();
+            if (val) hasAnyValue = true;
+            rowObj[h.colNumber] = val;
+          }
+          if (hasAnyValue) rows.push(rowObj);
+        });
+
+        this.rawRows = rows;
+        this.populateMappingDropdowns(headers);
+        this.buildPreview();
+      },
+
+      extractCellText(cell) {
+        if (!cell || cell.value === null || cell.value === undefined) return '';
+        const v = cell.value;
+        if (typeof v === 'object') {
+          if (v.richText) return v.richText.map(r => r.text).join('');
+          if (v.text) return String(v.text);
+          if (v.result !== undefined) return String(v.result);
+        }
+        return String(v);
+      },
+
+      populateMappingDropdowns(headers) {
+        const makeOpts = (includeNone = false) => {
+          let html = includeNone ? `<option value="">-- Not Mapped (Default: General) --</option>` : '';
+          html += headers.map(h => `<option value="${h.colNumber}">${Utils.escapeHTML(h.label)} (Col ${h.colNumber})</option>`).join('');
+          return html;
+        };
+
+        const mapId = document.getElementById('mapGameId');
+        const mapTitle = document.getElementById('mapTitle');
+        const mapTheme = document.getElementById('mapTheme');
+        const mapExp = document.getElementById('mapExplanation');
+        const mapCat = document.getElementById('mapCategory');
+
+        mapId.innerHTML = makeOpts(false);
+        mapTitle.innerHTML = makeOpts(false);
+        mapTheme.innerHTML = makeOpts(false);
+        mapExp.innerHTML = makeOpts(false);
+        mapCat.innerHTML = makeOpts(true);
+
+        // Smart auto-detection of headings
+        const findCol = (keywords) => {
+          const found = headers.find(h => keywords.some(k => h.label.toLowerCase().includes(k)));
+          return found ? String(found.colNumber) : '';
+        };
+
+        if (findCol(['game id', 'id', 'code'])) mapId.value = findCol(['game id', 'id', 'code']);
+        if (findCol(['game title', 'title', 'name'])) mapTitle.value = findCol(['game title', 'title', 'name']);
+        if (findCol(['theme', 'genre', 'setting'])) mapTheme.value = findCol(['theme', 'genre', 'setting']);
+        if (findCol(['explanation', 'description', 'concept', 'detail'])) mapExp.value = findCol(['explanation', 'description', 'concept', 'detail']);
+        if (findCol(['category', 'type', 'group'])) mapCat.value = findCol(['category', 'type', 'group']);
+      },
+
+      buildPreview() {
+        const colId = document.getElementById('mapGameId').value;
+        const colTitle = document.getElementById('mapTitle').value;
+        const colTheme = document.getElementById('mapTheme').value;
+        const colExp = document.getElementById('mapExplanation').value;
+        const colCat = document.getElementById('mapCategory').value;
+        const mode = document.getElementById('importConflictMode').value;
+
+        const valid = [];
+        const invalid = [];
+        const seenFileIds = new Set();
+        const seenFileTitles = new Set();
+        const existingTitles = new Set(Store.games.map(g => String(g.title).trim().toLowerCase()));
+
+        let skippedExistingCount = 0;
+        let updateExistingCount = 0;
+        let duplicateTitleWarnings = 0;
+
+        for (const r of this.rawRows) {
+          const gameId = (r[colId] || '').trim();
+          const title = (r[colTitle] || '').trim();
+          const theme = (r[colTheme] || '').trim();
+          const explanation = (r[colExp] || '').trim();
+          const category = colCat ? ((r[colCat] || '').trim() || 'General') : 'General';
+
+          const errors = [];
+          if (!gameId) errors.push('Missing Game ID');
+          if (!title) errors.push('Missing Game Title');
+          if (!theme) errors.push('Missing Theme');
+          if (!explanation) errors.push('Missing Explanation');
+
+          if (gameId && seenFileIds.has(gameId.toLowerCase())) {
+            errors.push(`Duplicate Game ID "${gameId}" within Excel file`);
+          }
+
+          if (errors.length > 0) {
+            invalid.push({
+              rowNumber: r.__rowNumber,
+              gameId: gameId || '(blank)',
+              title: title || '(blank)',
+              reason: errors.join('; ')
+            });
+            continue;
+          }
+
+          seenFileIds.add(gameId.toLowerCase());
+
+          const existsInDb = Store.gameById.has(gameId);
+          if (existsInDb && mode === 'skip') {
+            skippedExistingCount++;
+            invalid.push({
+              rowNumber: r.__rowNumber,
+              gameId,
+              title,
+              reason: 'Skipped (Game ID already exists in catalog)'
+            });
+            continue;
+          }
+
+          const normTitle = title.toLowerCase();
+          const isDupTitle = seenFileTitles.has(normTitle) || (!existsInDb && existingTitles.has(normTitle));
+          if (isDupTitle) duplicateTitleWarnings++;
+          seenFileTitles.add(normTitle);
+
+          if (existsInDb) updateExistingCount++;
+
+          valid.push({
+            rowNumber: r.__rowNumber,
+            action: existsInDb ? 'UPDATE' : 'INSERT',
+            isDupTitle,
+            gameId,
+            title,
+            theme,
+            explanation,
+            category
+          });
+        }
+
+        this.validRecords = valid;
+        this.invalidRecords = invalid;
+
+        document.getElementById('excelPreviewPanel').style.display = 'block';
+        document.getElementById('excelValidationBadges').innerHTML = `
+          <span class="badge badge-green">${valid.length} Valid Ready</span>
+          <span class="badge badge-rose">${invalid.length} Invalid / Skipped</span>
+          ${updateExistingCount > 0 ? `<span class="badge badge-blue">${updateExistingCount} Will Update</span>` : ''}
+          ${duplicateTitleWarnings > 0 ? `<span class="badge badge-amber">${duplicateTitleWarnings} Duplicate Title Notice(s)</span>` : ''}
+        `;
+
+        const invSec = document.getElementById('excelInvalidSection');
+        if (invalid.length > 0) {
+          invSec.style.display = 'block';
+          document.getElementById('excelInvalidBody').innerHTML = invalid.slice(0, 100).map(inv => `
+            <tr>
+              <td class="font-mono">${inv.rowNumber}</td>
+              <td class="font-mono">${Utils.escapeHTML(inv.gameId)}</td>
+              <td>${Utils.escapeHTML(inv.title)}</td>
+              <td style="color:#fda4af;">${Utils.escapeHTML(inv.reason)}</td>
+            </tr>
+          `).join('');
+        } else {
+          invSec.style.display = 'none';
+        }
+
+        document.getElementById('excelValidPreviewBody').innerHTML = valid.slice(0, 25).map(v => `
+          <tr>
+            <td class="font-mono">${v.rowNumber}</td>
+            <td><span class="badge ${v.action === 'UPDATE' ? 'badge-blue' : 'badge-green'}">${v.action}</span></td>
+            <td class="font-mono"><strong>${Utils.escapeHTML(v.gameId)}</strong></td>
+            <td>
+              ${Utils.escapeHTML(v.title)}
+              ${v.isDupTitle ? `<span class="badge badge-amber" title="Duplicate title detected">Dup Title</span>` : ''}
+            </td>
+            <td>${Utils.escapeHTML(v.theme)}</td>
+            <td>${Utils.escapeHTML(v.category)}</td>
+            <td class="text-xs text-muted">${Utils.escapeHTML(v.explanation.slice(0, 90))}${v.explanation.length > 90 ? '...' : ''}</td>
+          </tr>
+        `).join('');
+
+        document.getElementById('btnConfirmImport').disabled = valid.length === 0;
+      },
+
+      executeImport() {
+        if (this.validRecords.length === 0) return;
+
+        let inserted = 0;
+        let updated = 0;
+
+        for (const rec of this.validRecords) {
+          const cleanObj = {
+            gameId: rec.gameId,
+            title: rec.title,
+            theme: rec.theme,
+            explanation: rec.explanation,
+            category: rec.category
+          };
+
+          const existingIdx = Store.games.findIndex(g => String(g.gameId) === rec.gameId);
+          if (existingIdx !== -1) {
+            Store.games[existingIdx] = cleanObj;
+            updated++;
+          } else {
+            Store.games.push(cleanObj);
+            inserted++;
+          }
+        }
+
+        Store.saveGames();
+        Store.logImportHistory({
+          inserted,
+          updated,
+          rejected: this.invalidRecords.length,
+          totalCatalogSize: Store.games.length
+        });
+
+        App.updateHomeStats();
+        Toast.show(`Import complete: ${inserted} added, ${updated} updated, ${this.invalidRecords.length} skipped/invalid.`, 'success');
+
+        // Reset preview state
+        this.validRecords = [];
+        this.invalidRecords = [];
+        document.getElementById('excelPreviewPanel').style.display = 'none';
+        document.getElementById('excelMappingPanel').style.display = 'none';
+        document.getElementById('excelFileInput').value = '';
+        this.renderHistory();
+      },
+
+      renderHistory() {
+        const container = document.getElementById('importHistoryContainer');
+        if (Store.importHistory.length === 0) {
+          container.innerHTML = `<p class="text-sm text-muted">No Excel imports recorded yet.</p>`;
+          return;
+        }
+        container.innerHTML = `
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Inserted</th>
+                  <th>Updated</th>
+                  <th>Rejected / Skipped</th>
+                  <th>Total Catalog After</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Store.importHistory.map(h => `
+                  <tr>
+                    <td class="text-xs">${Utils.formatDate(h.timestamp)}</td>
+                    <td><span class="badge badge-green">+${h.inserted}</span></td>
+                    <td><span class="badge badge-blue">${h.updated}</span></td>
+                    <td><span class="badge badge-slate">${h.rejected}</span></td>
+                    <td class="font-mono">${h.totalCatalogSize.toLocaleString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    };
+
+    /* ========================================================================
+       MODULE 10: TEAM MANAGEMENT
+       ======================================================================== */
+    const TeamManager = {
+      renderTeams() {
+        const tbody = document.getElementById('adminTeamsTableBody');
+        const q = (document.getElementById('adminTeamSearch').value || '').trim().toLowerCase();
+        const statusFilter = document.getElementById('adminTeamStatusFilter').value;
+
+        const filtered = Store.teams
+          .filter(t => {
+            if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
+            if (!q) return true;
+            return (
+              String(t.teamNumber).toLowerCase().includes(q) ||
+              String(t.teamName).toLowerCase().includes(q)
+            );
+          })
+          .sort((a, b) => String(a.teamNumber).localeCompare(String(b.teamNumber), undefined, { numeric: true }));
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">No teams registered yet. Add teams individually or use Bulk Generate Teams.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = filtered.map(t => {
+          const count = (Store.allocationsByTeam.get(String(t.teamNumber)) || []).length;
+          return `
+            <tr>
+              <td class="font-mono"><strong>#${Utils.escapeHTML(t.teamNumber)}</strong></td>
+              <td>${Utils.escapeHTML(t.teamName)}</td>
+              <td>
+                <span class="badge ${t.status === 'active' ? 'badge-green' : 'badge-amber'}">
+                  ${t.status === 'active' ? 'Active' : 'Inactive'}
+                </span>
+              </td>
+              <td><strong>${count}</strong> game${count === 1 ? '' : 's'}</td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button class="btn btn-secondary btn-sm" title="View Team Games" onclick="TeamManager.inspectTeamGames('${Utils.escapeHTML(t.teamNumber)}')">
+                  <i data-lucide="eye" width="14"></i> Games
+                </button>
+                <button class="btn btn-secondary btn-sm" title="Toggle Active/Inactive" onclick="TeamManager.toggleTeamStatus('${Utils.escapeHTML(t.teamNumber)}')">
+                  <i data-lucide="power" width="14"></i>
+                </button>
+                <button class="btn btn-secondary btn-sm" title="Edit Team" onclick="TeamManager.openTeamModal('${Utils.escapeHTML(t.teamNumber)}')">
+                  <i data-lucide="edit-3" width="14"></i>
+                </button>
+                <button class="btn btn-danger btn-sm" title="Delete Team" onclick="TeamManager.promptDeleteTeam('${Utils.escapeHTML(t.teamNumber)}')">
+                  <i data-lucide="trash-2" width="14"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        Utils.refreshIcons();
+      },
+
+      openTeamModal(teamNumber = null) {
+        const titleEl = document.getElementById('teamFormModalTitle');
+        const origInput = document.getElementById('editTeamOriginalNumber');
+        const numInput = document.getElementById('fieldTeamNumber');
+        const nameInput = document.getElementById('fieldTeamName');
+        const statusInput = document.getElementById('fieldTeamStatus');
+
+        if (teamNumber !== null) {
+          const team = Store.teams.find(t => String(t.teamNumber) === String(teamNumber));
+          if (!team) return;
+          titleEl.textContent = `Edit Team #${team.teamNumber}`;
+          origInput.value = team.teamNumber;
+          numInput.value = team.teamNumber;
+          nameInput.value = team.teamName;
+          statusInput.value = team.status;
+        } else {
+          titleEl.textContent = 'Create New Team';
+          origInput.value = '';
+          numInput.value = '';
+          nameInput.value = '';
+          statusInput.value = 'active';
+        }
+        ModalUI.open('teamFormModal');
+      },
+
+      saveTeam(event) {
+        event.preventDefault();
+        const origNum = document.getElementById('editTeamOriginalNumber').value.trim();
+        const teamNumber = document.getElementById('fieldTeamNumber').value.trim();
+        const teamName = document.getElementById('fieldTeamName').value.trim();
+        const status = document.getElementById('fieldTeamStatus').value;
+
+        if (!teamNumber || !teamName) {
+          Toast.show('Team Number and Team Name are required.', 'error');
+          return;
+        }
+
+        const duplicate = Store.teams.some(t =>
+          String(t.teamNumber).toLowerCase() === teamNumber.toLowerCase() &&
+          String(t.teamNumber) !== origNum
+        );
+
+        if (duplicate) {
+          Toast.show(`Team Number "${teamNumber}" already exists.`, 'error');
+          return;
+        }
+
+        if (origNum) {
+          const idx = Store.teams.findIndex(t => String(t.teamNumber) === origNum);
+          if (idx !== -1) {
+            Store.teams[idx] = { teamNumber, teamName, status };
+            if (origNum !== teamNumber) {
+              Store.allocations.forEach(a => {
+                if (String(a.teamNumber) === origNum) a.teamNumber = teamNumber;
+              });
+              Store.saveAllocations();
+            }
+          }
+          Toast.show(`Team #${teamNumber} updated.`, 'success');
+        } else {
+          Store.teams.push({ teamNumber, teamName, status });
+          Toast.show(`Team #${teamNumber} created.`, 'success');
+        }
+
+        Store.saveTeams();
+        App.updateHomeStats();
+        ModalUI.close('teamFormModal');
+        this.renderTeams();
+      },
+
+      openBulkCreateModal() {
+        ModalUI.open('bulkTeamModal');
+      },
+
+      executeBulkCreate(event) {
+        event.preventDefault();
+        const start = parseInt(document.getElementById('bulkTeamStart').value, 10);
+        const end = parseInt(document.getElementById('bulkTeamEnd').value, 10);
+
+        if (isNaN(start) || isNaN(end) || start < 1 || end < start || (end - start) > 1000) {
+          Toast.show('Enter a valid range (max 1,000 teams at once).', 'error');
+          return;
+        }
+
+        const existingSet = new Set(Store.teams.map(t => String(t.teamNumber).toLowerCase()));
+        let created = 0;
+
+        for (let i = start; i <= end; i++) {
+          const numStr = String(i);
+          if (!existingSet.has(numStr.toLowerCase())) {
+            Store.teams.push({
+              teamNumber: numStr,
+              teamName: `Team ${numStr}`,
+              status: 'active'
+            });
+            existingSet.add(numStr.toLowerCase());
+            created++;
+          }
+        }
+
+        Store.saveTeams();
+        App.updateHomeStats();
+        ModalUI.close('bulkTeamModal');
+        Toast.show(`Created ${created} new active teams.`, 'success');
+        this.renderTeams();
+      },
+
+      toggleTeamStatus(teamNumber) {
+        const team = Store.teams.find(t => String(t.teamNumber) === String(teamNumber));
+        if (!team) return;
+        team.status = team.status === 'active' ? 'inactive' : 'active';
+        Store.saveTeams();
+        Toast.show(`Team #${team.teamNumber} set to ${team.status}.`, 'info');
+        this.renderTeams();
+      },
+
+      promptDeleteTeam(teamNumber) {
+        const assignedCount = (Store.allocationsByTeam.get(String(teamNumber)) || []).length;
+        if (assignedCount > 0) {
+          Toast.show(`Cannot delete Team #${teamNumber} while it has ${assignedCount} assigned game(s). Unassign or reallocate its games first.`, 'error');
+          return;
+        }
+
+        ModalUI.confirm({
+          title: `Delete Team #${teamNumber}?`,
+          message: `This team has 0 assigned games and can be safely removed. Proceed?`,
+          confirmText: 'Delete Team',
+          danger: true,
+          onConfirm: () => {
+            Store.teams = Store.teams.filter(t => String(t.teamNumber) !== String(teamNumber));
+            Store.saveTeams();
+            App.updateHomeStats();
+            Toast.show(`Team #${teamNumber} deleted.`, 'info');
+            this.renderTeams();
+          }
+        });
+      },
+
+      inspectTeamGames(teamNumber) {
+        document.getElementById('lookupTeamInput').value = teamNumber;
+        App.navigate('lookup');
+        UserPortal.lookupTeam(teamNumber);
+      }
+    };
+
+    /* ========================================================================
+       MODULE 11: UNIQUE ALLOCATION ENGINE (1 GAME = MAX 1 TEAM)
+       ======================================================================== */
+    const AllocationEngine = {
+      pendingPlan: null, // Holds validated preview allocations prior to commit
+
+      refreshUI() {
+        const select = document.getElementById('manualTeamSelect');
+        const sortedTeams = [...Store.teams].sort((a, b) =>
+          String(a.teamNumber).localeCompare(String(b.teamNumber), undefined, { numeric: true })
+        );
+        select.innerHTML = sortedTeams.length
+          ? sortedTeams.map(t => `<option value="${Utils.escapeHTML(t.teamNumber)}">Team #${Utils.escapeHTML(t.teamNumber)} — ${Utils.escapeHTML(t.teamName)} (${t.status})</option>`).join('')
+          : `<option value="">No teams created yet</option>`;
+
+        this.renderHistory();
+      },
+
+      fisherYatesShuffle(arr) {
+        const copy = [...arr];
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+      },
+
+      generatePreview() {
+        const mode = document.getElementById('allocModeSelect').value;
+        const order = document.getElementById('allocOrderSelect').value;
+
+        const activeTeams = Store.teams
+          .filter(t => t.status === 'active')
+          .sort((a, b) => String(a.teamNumber).localeCompare(String(b.teamNumber), undefined, { numeric: true }));
+
+        if (activeTeams.length === 0) {
+          Toast.show('No active teams available. Create or activate at least one team first.', 'error');
+          return;
+        }
+
+        if (Store.games.length === 0) {
+          Toast.show('Game catalog is empty. Import games before running allocation.', 'error');
+          return;
+        }
+
+        // Determine base allocations & candidate games
+        let baseAllocations = [];
+        let candidateGames = [];
+
+        if (mode === 'unassigned') {
+          baseAllocations = Store.allocations.map(a => ({ ...a }));
+          candidateGames = Store.games.filter(g => !Store.allocationByGameId.has(String(g.gameId)));
+        } else {
+          // Mode 2: Reallocate all games
+          baseAllocations = [];
+          candidateGames = [...Store.games];
+        }
+
+        if (candidateGames.length === 0) {
+          Toast.show('All games in the catalog are already allocated! Switch to MODE 2 to reallocate all games.', 'warning');
+          return;
+        }
+
+        if (order === 'random') {
+          candidateGames = this.fisherYatesShuffle(candidateGames);
+        } else {
+          candidateGames.sort((a, b) => String(a.gameId).localeCompare(String(b.gameId), undefined, { numeric: true }));
+        }
+
+        // Balanced distribution: base quota per team + 1-by-1 remainder distribution
+        // If Mode 1 (unassigned only), prioritize teams with fewer existing games so totals equalize!
+        const existingCountByTeam = new Map();
+        for (const t of activeTeams) existingCountByTeam.set(String(t.teamNumber), 0);
+        for (const a of baseAllocations) {
+          const tnum = String(a.teamNumber);
+          if (existingCountByTeam.has(tnum)) {
+            existingCountByTeam.set(tnum, existingCountByTeam.get(tnum) + 1);
+          }
+        }
+
+        // Sort active teams ascending by current count so remainder games fill lowest-count teams first
+        const teamBuckets = activeTeams.map(t => ({
+          teamNumber: String(t.teamNumber),
+          teamName: t.teamName,
+          existing: existingCountByTeam.get(String(t.teamNumber)) || 0,
+          added: 0
+        })).sort((a, b) => a.existing - b.existing || a.teamNumber.localeCompare(b.teamNumber, undefined, { numeric: true }));
+
+        const newAllocations = [];
+        const now = new Date().toISOString();
+        const usedGameIds = new Set(baseAllocations.map(a => String(a.gameId)));
+
+        for (let i = 0; i < candidateGames.length; i++) {
+          const game = candidateGames[i];
+          const gid = String(game.gameId);
+
+          // Strict uniqueness & existence verification
+          if (!Store.gameById.has(gid) || usedGameIds.has(gid)) continue;
+          usedGameIds.add(gid);
+
+          const bucket = teamBuckets[i % teamBuckets.length];
+          bucket.added++;
+          newAllocations.push({
+            gameId: gid,
+            teamNumber: bucket.teamNumber,
+            allocatedAt: now
+          });
+        }
+
+        const finalAllocations = [...baseAllocations, ...newAllocations];
+
+        // Final integrity check before showing preview
+        const verifySet = new Set();
+        for (const a of finalAllocations) {
+          if (verifySet.has(a.gameId)) {
+            Toast.show('Integrity error: Duplicate game assignment prevented.', 'error');
+            return;
+          }
+          verifySet.add(a.gameId);
+        }
+
+        this.pendingPlan = {
+          mode,
+          finalAllocations,
+          newlyAssignedCount: newAllocations.length,
+          teamBuckets: teamBuckets.sort((a, b) => a.teamNumber.localeCompare(b.teamNumber, undefined, { numeric: true }))
+        };
+
+        // Render Preview Card
+        const card = document.getElementById('allocationPreviewCard');
+        card.style.display = 'block';
+        document.getElementById('allocPreviewSummary').innerHTML = `
+          Mode: <strong>${mode === 'unassigned' ? 'Unassigned Games Only' : 'Full Reallocation (Overwrites Previous)'}</strong> &bull;
+          Assigning <strong>${newAllocations.length.toLocaleString()}</strong> games across <strong>${activeTeams.length}</strong> active teams.
+          Verified 100% unique 1-to-1 game assignments.
+        `;
+
+        document.getElementById('allocPreviewTableBody').innerHTML = this.pendingPlan.teamBuckets.map(b => `
+          <tr>
+            <td class="font-mono"><strong>#${Utils.escapeHTML(b.teamNumber)}</strong></td>
+            <td>${Utils.escapeHTML(b.teamName)}</td>
+            <td>${b.existing}</td>
+            <td><span class="badge badge-green">+${b.added}</span></td>
+            <td><strong>${b.existing + b.added}</strong></td>
+          </tr>
+        `).join('');
+
+        card.scrollIntoView({ behavior: 'smooth' });
+        Utils.refreshIcons();
+      },
+
+      cancelPreview() {
+        this.pendingPlan = null;
+        document.getElementById('allocationPreviewCard').style.display = 'none';
+      },
+
+      commitPreview() {
+        if (!this.pendingPlan) return;
+
+        const applyCommit = () => {
+          Store.allocations = this.pendingPlan.finalAllocations;
+          Store.saveAllocations();
+          Store.logAllocationHistory(
+            this.pendingPlan.mode === 'unassigned' ? 'Auto-Allocate Unassigned' : 'Full Reallocation',
+            `Assigned ${this.pendingPlan.newlyAssignedCount} games (Total allocated: ${Store.allocations.length}/${Store.games.length}).`
+          );
+
+          Toast.show(`Allocation committed! ${Store.allocations.length.toLocaleString()} total games assigned.`, 'success');
+          this.cancelPreview();
+          App.updateHomeStats();
+          this.renderHistory();
+        };
+
+        if (this.pendingPlan.mode === 'reallocate_all' && Store.allocations.length > 0) {
+          ModalUI.confirm({
+            title: 'Confirm Full Reallocation Overwrite',
+            message: `This will replace all ${Store.allocations.length} existing game assignments with the new distribution plan. Continue?`,
+            confirmText: 'Overwrite & Commit',
+            danger: true,
+            onConfirm: applyCommit
+          });
+        } else {
+          applyCommit();
+        }
+      },
+
+      handleManualAssign() {
+        const gid = document.getElementById('manualGameIdInput').value.trim();
+        const tnum = document.getElementById('manualTeamSelect').value.trim();
+
+        if (!gid || !tnum) {
+          Toast.show('Enter a Game ID and select a target team.', 'warning');
+          return;
+        }
+
+        if (!Store.gameById.has(gid)) {
+          Toast.show(`Game ID "${gid}" does not exist in the catalog.`, 'error');
+          return;
+        }
+
+        const team = Store.teams.find(t => String(t.teamNumber) === tnum);
+        if (!team) {
+          Toast.show(`Team #${tnum} does not exist.`, 'error');
+          return;
+        }
+
+        const existing = Store.allocationByGameId.get(gid);
+        const executeAssign = () => {
+          Store.allocations = Store.allocations.filter(a => String(a.gameId) !== gid);
+          Store.allocations.push({
+            gameId: gid,
+            teamNumber: tnum,
+            allocatedAt: new Date().toISOString()
+          });
+          Store.saveAllocations();
+          Store.logAllocationHistory(
+            existing ? 'Manual Reassignment' : 'Manual Assignment',
+            `Game ${gid} assigned to Team #${tnum}${existing ? ` (moved from Team #${existing.teamNumber})` : ''}.`
+          );
+          App.updateHomeStats();
+          this.renderHistory();
+          Toast.show(`Game ${gid} assigned exclusively to Team #${tnum}.`, 'success');
+        };
+
+        if (existing && String(existing.teamNumber) !== tnum) {
+          ModalUI.confirm({
+            title: `Reassign Game ${gid}?`,
+            message: `Game ${gid} is currently assigned to Team #${existing.teamNumber}. Reassign it exclusively to Team #${tnum}?`,
+            confirmText: 'Reassign Game',
+            danger: false,
+            onConfirm: executeAssign
+          });
+        } else {
+          executeAssign();
+        }
+      },
+
+      handleManualUnassign() {
+        const gid = document.getElementById('manualGameIdInput').value.trim();
+        if (!gid) {
+          Toast.show('Enter a Game ID to unassign.', 'warning');
+          return;
+        }
+        const existing = Store.allocationByGameId.get(gid);
+        if (!existing) {
+          Toast.show(`Game "${gid}" is not currently assigned to any team.`, 'info');
+          return;
+        }
+
+        Store.allocations = Store.allocations.filter(a => String(a.gameId) !== gid);
+        Store.saveAllocations();
+        Store.logAllocationHistory('Manual Unassign', `Removed Game ${gid} from Team #${existing.teamNumber}.`);
+        App.updateHomeStats();
+        this.renderHistory();
+        Toast.show(`Game ${gid} unassigned from Team #${existing.teamNumber}.`, 'info');
+      },
+
+      promptClearAllAllocations() {
+        if (Store.allocations.length === 0) {
+          Toast.show('There are no allocations to clear.', 'info');
+          return;
+        }
+        ModalUI.confirm({
+          title: 'Clear All Team Allocations?',
+          message: `This will unassign all ${Store.allocations.length} allocated games. Games and teams themselves will remain intact.`,
+          confirmText: 'Clear All Allocations',
+          danger: true,
+          onConfirm: () => {
+            const prevCount = Store.allocations.length;
+            Store.allocations = [];
+            Store.saveAllocations();
+            Store.logAllocationHistory('Cleared All Allocations', `Unassigned ${prevCount} games.`);
+            App.updateHomeStats();
+            this.renderHistory();
+            Toast.show('All allocations cleared.', 'info');
+          }
+        });
+      },
+
+      renderHistory() {
+        const container = document.getElementById('allocationHistoryContainer');
+        if (Store.allocHistory.length === 0) {
+          container.innerHTML = `<p class="text-sm text-muted">No allocation events logged yet.</p>`;
+          return;
+        }
+        container.innerHTML = `
+          <div class="table-wrapper" style="max-height:260px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Store.allocHistory.map(h => `
+                  <tr>
+                    <td class="text-xs" style="white-space:nowrap;">${Utils.formatDate(h.timestamp)}</td>
+                    <td><span class="badge badge-purple">${Utils.escapeHTML(h.action)}</span></td>
+                    <td class="text-sm">${Utils.escapeHTML(h.details)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    };
+
+    /* ========================================================================
+       MODULE 12: REPORTING & EXCEL EXPORTS
+       ======================================================================== */
+    const ReportModule = {
+      renderReports() {
+        const select = document.getElementById('reportSingleTeamSelect');
+        const tbody = document.getElementById('reportTeamSummaryBody');
+        const totalGames = Store.games.length;
+
+        const sortedTeams = [...Store.teams].sort((a, b) =>
+          String(a.teamNumber).localeCompare(String(b.teamNumber), undefined, { numeric: true })
+        );
+
+        select.innerHTML = sortedTeams.length
+          ? sortedTeams.map(t => `<option value="${Utils.escapeHTML(t.teamNumber)}">Team #${Utils.escapeHTML(t.teamNumber)} — ${Utils.escapeHTML(t.teamName)}</option>`).join('')
+          : `<option value="">No teams available</option>`;
+
+        if (sortedTeams.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">No teams available for reporting.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = sortedTeams.map(t => {
+          const count = (Store.allocationsByTeam.get(String(t.teamNumber)) || []).length;
+          const share = totalGames > 0 ? ((count / totalGames) * 100).toFixed(1) : '0.0';
+          return `
+            <tr>
+              <td class="font-mono"><strong>#${Utils.escapeHTML(t.teamNumber)}</strong></td>
+              <td>${Utils.escapeHTML(t.teamName)}</td>
+              <td><span class="badge ${t.status === 'active' ? 'badge-green' : 'badge-amber'}">${t.status}</span></td>
+              <td><strong>${count}</strong></td>
+              <td>${share}%</td>
+              <td style="text-align:right;">
+                <button class="btn btn-secondary btn-sm" onclick="ReportModule.exportTeamWorkbook('${Utils.escapeHTML(t.teamNumber)}')">
+                  <i data-lucide="download" width="14"></i> .xlsx
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        Utils.refreshIcons();
+      },
+
+      async exportAllAllocationsExcel() {
+        if (!window.ExcelJS) return Toast.show('ExcelJS not loaded.', 'error');
+        const wb = new ExcelJS.Workbook();
+
+        // Sheet 1: Team Summary
+        const summaryWs = wb.addWorksheet('Team_Summary');
+        summaryWs.columns = [
+          { header: 'Team Number', key: 'teamNumber', width: 16 },
+          { header: 'Team Name', key: 'teamName', width: 26 },
+          { header: 'Status', key: 'status', width: 14 },
+          { header: 'Assigned Game Count', key: 'count', width: 22 }
+        ];
+        summaryWs.getRow(1).font = { bold: true };
+
+        const sortedTeams = [...Store.teams].sort((a, b) =>
+          String(a.teamNumber).localeCompare(String(b.teamNumber), undefined, { numeric: true })
+        );
+        for (const t of sortedTeams) {
+          const count = (Store.allocationsByTeam.get(String(t.teamNumber)) || []).length;
+          summaryWs.addRow({ teamNumber: t.teamNumber, teamName: t.teamName, status: t.status, count });
+        }
+
+        // Sheet 2: Detailed Allocations
+        const detailWs = wb.addWorksheet('Detailed_Allocations');
+        detailWs.columns = [
+          { header: 'Team Number', key: 'teamNumber', width: 15 },
+          { header: 'Team Name', key: 'teamName', width: 24 },
+          { header: 'Game ID', key: 'gameId', width: 14 },
+          { header: 'Game Title', key: 'title', width: 32 },
+          { header: 'Theme', key: 'theme', width: 22 },
+          { header: 'Category', key: 'category', width: 18 },
+          { header: 'Explanation', key: 'explanation', width: 60 },
+          { header: 'Allocated At', key: 'allocatedAt', width: 24 }
+        ];
+        detailWs.getRow(1).font = { bold: true };
+
+        for (const t of sortedTeams) {
+          const allocs = Store.allocationsByTeam.get(String(t.teamNumber)) || [];
+          for (const a of allocs) {
+            const g = Store.gameById.get(String(a.gameId));
+            if (!g) continue;
+            detailWs.addRow({
+              teamNumber: t.teamNumber,
+              teamName: t.teamName,
+              gameId: g.gameId,
+              title: g.title,
+              theme: g.theme,
+              category: g.category || 'General',
+              explanation: g.explanation,
+              allocatedAt: a.allocatedAt
+            });
+          }
+        }
+
+        const buf = await wb.xlsx.writeBuffer();
+        ExcelModule.triggerDownload(buf, `GameHub_Team_Allocations_${new Date().toISOString().slice(0,10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        Toast.show('Team allocations Excel report exported.', 'success');
+      },
+
+      async exportAllGamesExcel() {
+        if (!window.ExcelJS) return Toast.show('ExcelJS not loaded.', 'error');
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('All_Games');
+        ws.columns = [
+          { header: 'Game ID', key: 'gameId', width: 14 },
+          { header: 'Game Title', key: 'title', width: 32 },
+          { header: 'Theme', key: 'theme', width: 22 },
+          { header: 'Category', key: 'category', width: 18 },
+          { header: 'Assigned Team', key: 'assignedTeam', width: 18 },
+          { header: 'Explanation', key: 'explanation', width: 65 }
+        ];
+        ws.getRow(1).font = { bold: true };
+
+        for (const g of Store.games) {
+          const alloc = Store.allocationByGameId.get(String(g.gameId));
+          ws.addRow({
+            gameId: g.gameId,
+            title: g.title,
+            theme: g.theme,
+            category: g.category || 'General',
+            assignedTeam: alloc ? `Team ${alloc.teamNumber}` : 'Unallocated',
+            explanation: g.explanation
+          });
+        }
+
+        const buf = await wb.xlsx.writeBuffer();
+        ExcelModule.triggerDownload(buf, `GameHub_Complete_Catalog_${new Date().toISOString().slice(0,10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        Toast.show('Complete game catalog exported.', 'success');
+      },
+
+      async exportUnallocatedExcel() {
+        if (!window.ExcelJS) return Toast.show('ExcelJS not loaded.', 'error');
+        const unallocated = Store.games.filter(g => !Store.allocationByGameId.has(String(g.gameId)));
+        if (unallocated.length === 0) {
+          Toast.show('There are 0 unallocated games to export.', 'info');
+          return;
+        }
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Unallocated_Games');
+        ws.columns = [
+          { header: 'Game ID', key: 'gameId', width: 14 },
+          { header: 'Game Title', key: 'title', width: 32 },
+          { header: 'Theme', key: 'theme', width: 22 },
+          { header: 'Category', key: 'category', width: 18 },
+          { header: 'Explanation', key: 'explanation', width: 65 }
+        ];
+        ws.getRow(1).font = { bold: true };
+        for (const g of unallocated) ws.addRow(g);
+
+        const buf = await wb.xlsx.writeBuffer();
+        ExcelModule.triggerDownload(buf, `GameHub_Unallocated_Games_${new Date().toISOString().slice(0,10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        Toast.show(`Exported ${unallocated.length} unallocated games.`, 'success');
+      },
+
+      exportSingleTeamExcel() {
+        const tnum = document.getElementById('reportSingleTeamSelect').value;
+        if (!tnum) return Toast.show('Select a team first.', 'warning');
+        this.exportTeamWorkbook(tnum);
+      },
+
+      async exportTeamWorkbook(teamNumber) {
+        if (!window.ExcelJS) return Toast.show('ExcelJS not loaded.', 'error');
+        const team = Store.teams.find(t => String(t.teamNumber) === String(teamNumber));
+        if (!team) return;
+
+        const allocs = Store.allocationsByTeam.get(String(team.teamNumber)) || [];
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet(`Team_${team.teamNumber}`);
+        ws.columns = [
+          { header: 'Game ID', key: 'gameId', width: 14 },
+          { header: 'Game Title', key: 'title', width: 32 },
+          { header: 'Theme', key: 'theme', width: 22 },
+          { header: 'Category', key: 'category', width: 18 },
+          { header: 'Explanation', key: 'explanation', width: 65 }
+        ];
+        ws.getRow(1).font = { bold: true };
+
+        for (const a of allocs) {
+          const g = Store.gameById.get(String(a.gameId));
+          if (g) ws.addRow(g);
+        }
+
+        const buf = await wb.xlsx.writeBuffer();
+        ExcelModule.triggerDownload(buf, `Team_${team.teamNumber}_Assigned_Games.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        Toast.show(`Exported Team #${team.teamNumber} report (${allocs.length} games).`, 'success');
+      }
+    };
+
+    /* ========================================================================
+       MODULE 13: FULL JSON BACKUP, RESTORE & RESET
+       ======================================================================== */
+    const BackupModule = {
+      exportJSON() {
+        const payload = {
+          app: 'GameHub',
+          version: '1.0',
+          exportedAt: new Date().toISOString(),
+          games: Store.games,
+          teams: Store.teams,
+          allocations: Store.allocations,
+          allocHistory: Store.allocHistory,
+          importHistory: Store.importHistory
+        };
+        const jsonStr = JSON.stringify(payload, null, 2);
+        ExcelModule.triggerDownload(
+          jsonStr,
+          `GameHub_Backup_${new Date().toISOString().slice(0,10)}.json`,
+          'application/json'
+        );
+        Toast.show('Full JSON backup downloaded.', 'success');
+      },
+
+      importJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const parsed = JSON.parse(e.target.result);
+            if (!Array.isArray(parsed.games) || !Array.isArray(parsed.teams) || !Array.isArray(parsed.allocations)) {
+              throw new Error('Invalid GameHub backup format.');
+            }
+
+            ModalUI.confirm({
+              title: 'Restore JSON Backup?',
+              message: `Replace current dataset with backup containing ${parsed.games.length} games, ${parsed.teams.length} teams, and ${parsed.allocations.length} allocations?`,
+              confirmText: 'Restore Backup',
+              danger: true,
+              onConfirm: () => {
+                Store.games = parsed.games;
+                Store.teams = parsed.teams;
+                Store.allocations = parsed.allocations;
+                Store.allocHistory = Array.isArray(parsed.allocHistory) ? parsed.allocHistory : [];
+                Store.importHistory = Array.isArray(parsed.importHistory) ? parsed.importHistory : [];
+
+                Store.saveGames();
+                Store.saveTeams();
+                Store.saveAllocations();
+                Store.writeJSON(StorageKeys.ALLOC_HISTORY, Store.allocHistory);
+                Store.writeJSON(StorageKeys.IMPORT_HISTORY, Store.importHistory);
+
+                App.updateHomeStats();
+                AdminUI.refreshAll();
+                Toast.show('JSON backup restored successfully.', 'success');
+              }
+            });
+          } catch (err) {
+            Toast.show(`Backup Restore Failed: ${err.message}`, 'error');
+          } finally {
+            event.target.value = '';
+          }
+        };
+        reader.readAsText(file);
+      },
+
+      promptFactoryReset() {
+        ModalUI.confirm({
+          title: 'Reset All Application Data?',
+          message: 'WARNING: This will permanently wipe all games, teams, allocations, and audit logs from browser LocalStorage. Export a JSON backup first if needed.',
+          confirmText: 'Wipe All Data',
+          danger: true,
+          onConfirm: () => {
+            Store.games = [];
+            Store.teams = [];
+            Store.allocations = [];
+            Store.allocHistory = [];
+            Store.importHistory = [];
+
+            Store.saveGames();
+            Store.saveTeams();
+            Store.saveAllocations();
+            Store.writeJSON(StorageKeys.ALLOC_HISTORY, []);
+            Store.writeJSON(StorageKeys.IMPORT_HISTORY, []);
+
+            App.updateHomeStats();
+            AdminUI.refreshAll();
+            Toast.show('All application data has been reset to clean empty state.', 'info');
+          }
+        });
+      }
+    };
+
+    /* ========================================================================
+       BOOTSTRAP APPLICATION
+       ======================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      App.init();
+    });
+  </script>
+</body>
+</html>
