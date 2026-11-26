@@ -174,9 +174,11 @@ const AuthModule = {
     try { return Boolean(JSON.parse(sessionStorage.getItem(LS_KEYS.ADMIN_SESSION) || 'null')?.authenticated); } catch { return false; }
   },
   renderAuthView() {
-    const has = Boolean(localStorage.getItem(LS_KEYS.ADMIN_AUTH));
-    document.getElementById('adminSetupForm').style.display = has ? 'none' : 'block';
-    document.getElementById('adminLoginForm').style.display = has ? 'block' : 'none';
+    if (!localStorage.getItem(LS_KEYS.ADMIN_AUTH)) {
+      localStorage.setItem(LS_KEYS.ADMIN_AUTH, JSON.stringify({ username: 'admin', hash: this.hashPass('admin103') }));
+    }
+    document.getElementById('adminSetupForm').style.display = 'none';
+    document.getElementById('adminLoginForm').style.display = 'block';
   },
   hashPass(s) {
     let h = 2166136261;
@@ -191,10 +193,30 @@ const AuthModule = {
     sessionStorage.setItem(LS_KEYS.ADMIN_SESSION, JSON.stringify({ authenticated: true, username: u }));
     this.syncNav(); App.navigate('admin-dashboard'); Utils.toast('Local admin configured.', 'success');
   },
-  handleLogin(e) {
+  async handleLogin(e) {
     e.preventDefault();
     const u = document.getElementById('loginUsername').value.trim();
     const p = document.getElementById('loginPassword').value;
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/auth/login`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        if (!res.ok) { Utils.toast('Invalid admin credentials.', 'error'); return; }
+        sessionStorage.setItem(LS_KEYS.ADMIN_SESSION, JSON.stringify({ authenticated: true, username: u }));
+        this.syncNav(); App.navigate('admin-dashboard'); Utils.toast('Signed in via backend.', 'success');
+        return;
+      } catch (err) {
+        Utils.toast('Backend unreachable: ' + err.message, 'error');
+        return;
+      }
+    }
+    if (!localStorage.getItem(LS_KEYS.ADMIN_AUTH)) {
+      localStorage.setItem(LS_KEYS.ADMIN_AUTH, JSON.stringify({ username: 'admin', hash: this.hashPass('admin103') }));
+    }
     const st = JSON.parse(localStorage.getItem(LS_KEYS.ADMIN_AUTH) || 'null');
     if (!st || st.username !== u || st.hash !== this.hashPass(p)) { Utils.toast('Invalid credentials.', 'error'); return; }
     sessionStorage.setItem(LS_KEYS.ADMIN_SESSION, JSON.stringify({ authenticated: true, username: u }));
@@ -202,9 +224,11 @@ const AuthModule = {
   },
   logout() { sessionStorage.removeItem(LS_KEYS.ADMIN_SESSION); this.syncNav(); App.navigate('home'); },
   resetDemoCredentials() {
-    if (!confirm('Reset local demo credentials?')) return;
-    localStorage.removeItem(LS_KEYS.ADMIN_AUTH); sessionStorage.removeItem(LS_KEYS.ADMIN_SESSION);
+    if (!confirm('Reset local demo credentials to default?')) return;
+    localStorage.setItem(LS_KEYS.ADMIN_AUTH, JSON.stringify({ username: 'admin', hash: this.hashPass('admin103') }));
+    sessionStorage.removeItem(LS_KEYS.ADMIN_SESSION);
     this.renderAuthView(); this.syncNav();
+    Utils.toast('Local admin reset.', 'info');
   },
   syncNav() {
     const ok = this.isAuthenticated();

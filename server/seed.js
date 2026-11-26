@@ -69,7 +69,7 @@ async function seed() {
 
   // 5. Ensure default superadmin exists if admins collection is empty
   if ((await AdminUser.countDocuments()) === 0) {
-    const initialPass = process.env.ADMIN_INIT_PASSWORD || 'admin123';
+    const initialPass = process.env.ADMIN_INIT_PASSWORD || 'admin103';
     const { salt, hash } = hashPassword(initialPass);
     await AdminUser.create({ username: 'admin', passwordHash: hash, salt, role: 'superadmin' });
     console.log('Created initial superadmin (username: admin)');
