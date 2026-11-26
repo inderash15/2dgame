@@ -5,6 +5,7 @@
     { "src": "styles.css", "use": "@vercel/static" },
     { "src": "app.js", "use": "@vercel/static" },
     { "src": "favicon.svg", "use": "@vercel/static" },
+    { "src": "published-data.json", "use": "@vercel/static" },
     { "src": "1750_Unique_Non_Duplicate_2D_Games.xlsx", "use": "@vercel/static" },
     { "src": "SoISDS-2D_Games_Team_Leaders_with_Mentors_T001-T263-v2.pdf", "use": "@vercel/static" }
   ],

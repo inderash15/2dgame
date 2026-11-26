@@ -58,6 +58,7 @@ const AppState = {
   games: [],
   teams: [],
   allocations: [],
+  publishedAllocations: [],
   teamMeta: {},
   sixGameTeams: [],
   allocationVersions: [],
@@ -110,7 +111,7 @@ const DataRepository = {
     });
   },
   async loadAll() {
-    for (const k of ['games','teams','allocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory']) {
+    for (const k of ['games','teams','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory']) {
       AppState[k] = await this.get(k, AppState[k]);
     }
     const savedSettings = await this.get('settings', null);
@@ -120,12 +121,17 @@ const DataRepository = {
       const id = Utils.normalizeTeamNumber(t.teamId || t.teamNumber);
       return { ...t, teamId: id, teamNumber: id };
     });
-    AppState.allocations = (AppState.allocations || []).map(a => {
+    const normAlloc = (arr) => (arr || []).map(a => {
       const id = Utils.normalizeTeamNumber(a.teamId || a.teamNumber);
       return { ...a, teamId: id, teamNumber: id };
     });
+    AppState.allocations = normAlloc(AppState.allocations);
+    AppState.publishedAllocations = normAlloc(AppState.publishedAllocations);
+    if (AppState.settings.published && AppState.publishedAllocations.length === 0 && AppState.allocations.length === 1750) {
+      AppState.publishedAllocations = [...AppState.allocations];
+    }
   },
-  async saveState(keys = ['games','teams','allocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory','settings']) {
+  async saveState(keys = ['games','teams','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory','settings']) {
     for (const k of keys) await this.set(k, AppState[k]);
   },
   async logAudit(action, details, actor = 'Admin') {
@@ -235,28 +241,66 @@ const ExcelModule = {
         difficulty: col(['Difficulty']), conceptOrigin: col(['Concept Origin / Status']),
         originalRef: col(['Original File Reference']), uniquenessCheck: col(['Live Title Uniqueness Check'])
       };
-      const parsed = []; const seenIds = new Set(); let dupCount = 0;
+      const parsed = []; const seenIds = new Set();
+      const duplicateIds = []; const failedRecords = []; const missingRequired = [];
+      let totalRows = 0;
+
+      const cellStr = (row, c) => {
+        if (!c) return '';
+        const val = row.getCell(c).value;
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'object') {
+          if (val.richText) return val.richText.map(rt => rt.text || '').join('').trim();
+          if (val.result !== undefined) return String(val.result).trim();
+          if (val.text !== undefined) return String(val.text).trim();
+        }
+        return String(val).trim();
+      };
+
       for (let r = headerRowIdx + 1; r <= sheet.rowCount; r++) {
         const row = sheet.getRow(r);
-        const str = (c) => c ? String(row.getCell(c).text || row.getCell(c).value || '').trim() : '';
-        const gameId = str(idx.gameId); const title = str(idx.title);
-        if (!gameId || !title) continue;
-        if (seenIds.has(gameId)) dupCount++;
+        const gameId = cellStr(row, idx.gameId);
+        const title = cellStr(row, idx.title);
+        if (!gameId && !title) continue;
+        totalRows++;
+
+        const genre = cellStr(row, idx.genre);
+        const difficulty = cellStr(row, idx.difficulty);
+        if (!gameId || !title || !genre) {
+          missingRequired.push(`Row ${r} (${gameId || 'no ID'})`);
+          failedRecords.push({ row: r, reason: 'Missing required field (Game ID, Title, or Genre)' });
+          continue;
+        }
+        if (seenIds.has(gameId)) {
+          duplicateIds.push(gameId);
+          continue;
+        }
         seenIds.add(gameId);
         parsed.push({
-          gameId, sourceTeamId: str(idx.sourceTeamId), gameSlot: str(idx.gameSlot),
-          genre: str(idx.genre) || 'Uncategorized', title, coreMechanic: str(idx.coreMechanic),
-          description: str(idx.description), objective: str(idx.objective),
-          level1Focus: str(idx.level1Focus), level2Focus: str(idx.level2Focus),
-          implementation2D: str(idx.implementation2D), scope12Hour: str(idx.scope12Hour),
-          difficulty: str(idx.difficulty) || 'Medium', conceptOrigin: str(idx.conceptOrigin),
-          originalRef: str(idx.originalRef), uniquenessCheck: str(idx.uniquenessCheck), archived: false
+          gameId, sourceTeamId: cellStr(row, idx.sourceTeamId), gameSlot: cellStr(row, idx.gameSlot),
+          genre: genre || 'Uncategorized', title, coreMechanic: cellStr(row, idx.coreMechanic),
+          description: cellStr(row, idx.description), objective: cellStr(row, idx.objective),
+          level1Focus: cellStr(row, idx.level1Focus), level2Focus: cellStr(row, idx.level2Focus),
+          implementation2D: cellStr(row, idx.implementation2D), scope12Hour: cellStr(row, idx.scope12Hour),
+          difficulty: difficulty || 'Medium', conceptOrigin: cellStr(row, idx.conceptOrigin),
+          originalRef: cellStr(row, idx.originalRef), uniquenessCheck: cellStr(row, idx.uniquenessCheck), archived: false
         });
       }
+      const importTime = new Date().toLocaleString();
       AppState.pendingExcelGames = parsed;
+      AppState.pendingExcelStats = { totalRows, validCount: parsed.length, failedCount: failedRecords.length, duplicateCount: duplicateIds.length, missingCount: missingRequired.length, importTime };
+      const ok = parsed.length === 1750 && duplicateIds.length === 0 && failedRecords.length === 0;
       el.innerHTML = `
-        <div class="alert-box ${parsed.length === 1750 && dupCount === 0 ? 'alert-success' : 'alert-warn'} mb-2">
-          <div><strong>${Utils.escapeHtml(sheet.name)}</strong>: ${parsed.length} games parsed, ${dupCount} duplicate IDs.</div>
+        <div class="alert-box ${ok ? 'alert-success' : 'alert-warn'} mb-2">
+          <div>
+            <strong>Excel Import Validation (${Utils.escapeHtml(sheet.name)}):</strong><br/>
+            Total records in Excel: <strong>${totalRows}</strong> |
+            Valid unique games: <strong>${parsed.length} / 1,750</strong> |
+            Failed records: <strong>${failedRecords.length}</strong> |
+            Duplicate Game IDs: <strong>${duplicateIds.length}</strong> |
+            Missing required fields: <strong>${missingRequired.length}</strong><br/>
+            <span class="text-xs">Parsed at: ${Utils.escapeHtml(importTime)} (Historical Team ID column preserved as source metadata only)</span>
+          </div>
         </div>
         <button class="btn btn-primary btn-sm" onclick="ExcelModule.confirmImport()">Confirm & Import ${parsed.length} Games</button>
       `;
@@ -266,13 +310,42 @@ const ExcelModule = {
   },
   async confirmImport() {
     if (!AppState.pendingExcelGames) return;
-    if (AppState.settings.locked && !confirm('Allocation is LOCKED. Replacing games will unlock and reset allocations. Continue?')) return;
+    if (AppState.settings.locked && !confirm('Allocation is LOCKED. Replacing games will unlock and reset draft allocations. Continue?')) return;
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/admin/import/games`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ games: AppState.pendingExcelGames })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Backend import failed (${res.status})`);
+        }
+      } catch (err) {
+        document.getElementById('excelPreviewArea').innerHTML = `<div class="alert-box alert-danger">Import failed: ${Utils.escapeHtml(err.message)}</div>`;
+        Utils.toast(err.message, 'error');
+        return;
+      }
+    }
+    const stats = AppState.pendingExcelStats || { totalRows: AppState.pendingExcelGames.length, validCount: AppState.pendingExcelGames.length, failedCount: 0, duplicateCount: 0, missingCount: 0, importTime: new Date().toLocaleString() };
     AppState.games = AppState.pendingExcelGames;
     AppState.pendingExcelGames = null;
-    AppState.allocations = []; AppState.settings.locked = false; AppState.settings.published = false;
+    AppState.allocations = []; AppState.settings.locked = false;
     await DataRepository.saveState(['games','allocations','settings']);
-    await DataRepository.logAudit('EXCEL_IMPORT', `Imported ${AppState.games.length} games.`);
-    document.getElementById('excelPreviewArea').innerHTML = `<div class="alert-box alert-success">Saved ${AppState.games.length} games!</div>`;
+    await DataRepository.logAudit('EXCEL_IMPORT', `Imported ${AppState.games.length} games (${stats.duplicateCount} dupes, ${stats.failedCount} failed).`);
+    document.getElementById('excelPreviewArea').innerHTML = `
+      <div class="alert-box alert-success">
+        <div>
+          <strong>Import Complete (${Utils.escapeHtml(stats.importTime)}):</strong>
+          Total in Excel: <strong>${stats.totalRows}</strong> |
+          Successfully imported: <strong>${AppState.games.length}</strong> |
+          Failed: <strong>${stats.failedCount}</strong> |
+          Duplicates skipped: <strong>${stats.duplicateCount}</strong> |
+          Missing fields: <strong>${stats.missingCount}</strong>
+        </div>
+      </div>`;
     App.refreshAllUI();
   }
 };
@@ -398,9 +471,10 @@ const PdfRosterModule = {
     const out = {}; cols.forEach(([k]) => { out[k] = []; });
     for (const it of items) {
       let bk = cols[0][0];
-      for (let i = 0; i < cols.length; i++) {
-        const [k, ax] = cols[i]; const nx = i + 1 < cols.length ? cols[i + 1][1] : Infinity;
-        if (it.x >= ax - 12 && it.x < nx - 12) { bk = k; break; }
+      let bestDist = Infinity;
+      for (const [k, ax] of cols) {
+        const dist = Math.abs(it.x - ax);
+        if (dist < bestDist) { bestDist = dist; bk = k; }
       }
       out[bk].push(it.str);
     }
@@ -620,7 +694,7 @@ const UserPortal = {
 
     // 2. Local/Static fallback: auto-hydrate roster from deployed PDF if IndexedDB is empty
     if (!team) {
-      if (AppState.teams.length === 0 && window.location.protocol.startsWith('http')) {
+      if ((AppState.teams.length === 0 || (!AppState.settings.published && AppState.publishedAllocations.length === 0)) && window.location.protocol.startsWith('http')) {
         area.innerHTML = `<div class="alert-box alert-info">Loading official 263-team roster...</div>`;
         await App.autoHydrateRoster();
       }
@@ -633,7 +707,8 @@ const UserPortal = {
         area.innerHTML = `<div class="alert-box alert-danger">Invalid Team Access Code for ${Utils.escapeHtml(teamId)}.</div>`; return;
       }
       const gameMap = new Map(AppState.games.map(g => [g.gameId, g]));
-      assigned = isPub ? AppState.allocations.filter(a => (a.teamId || a.teamNumber) === teamId).map(a => gameMap.get(a.gameId)).filter(Boolean) : [];
+      const pubList = AppState.publishedAllocations.length === 1750 ? AppState.publishedAllocations : (isPub ? AppState.allocations : []);
+      assigned = isPub ? pubList.filter(a => (a.teamId || a.teamNumber) === teamId).map(a => gameMap.get(a.gameId)).filter(Boolean) : [];
       anns = AppState.announcements.filter(a => a.target === 'ALL' || a.target === teamId);
     }
 
@@ -782,7 +857,7 @@ const AdminUI = {
     const val = ValidationEngine.validateAll();
     const totalG = AppState.games.filter(g => !g.archived).length;
     const allocG = AppState.allocations.length;
-    const pubG = AppState.settings.published ? allocG : 0;
+    const pubG = AppState.settings.published ? (AppState.publishedAllocations.length || allocG) : 0;
     const pendG = AppState.settings.published ? 0 : allocG;
 
     document.getElementById('kpiTotalGames').textContent = totalG;
@@ -839,15 +914,15 @@ const GameManager = {
     cSel.innerHTML = `<option value="">All Genres</option>` + cats.map(c => `<option value="${Utils.escapeHtml(c)}">${Utils.escapeHtml(c)}</option>`).join('');
     cSel.value = curC;
 
-    const q = (document.getElementById('adminGameSearch').value || '').toLowerCase();
+    const q = (document.getElementById('adminGameSearch').value || '').toLowerCase().trim();
     const diff = document.getElementById('adminGameDiffFilter').value;
     const arch = document.getElementById('adminGameArchiveFilter').value;
-    const allocMap = new Map(AppState.allocations.map(a => [a.gameId, a.teamNumber]));
+    const allocMap = new Map(AppState.allocations.map(a => [a.gameId, a.teamId || a.teamNumber]));
 
     const list = AppState.games.filter(g => {
       if (arch === 'active' && g.archived) return false;
       if (arch === 'archived' && !g.archived) return false;
-      if (q && !g.gameId.toLowerCase().includes(q) && !g.title.toLowerCase().includes(q)) return false;
+      if (q && !g.gameId.toLowerCase().includes(q) && !g.title.toLowerCase().includes(q) && !(g.coreMechanic || '').toLowerCase().includes(q)) return false;
       if (curC && g.genre !== curC) return false;
       if (diff && g.difficulty !== diff) return false;
       return true;
@@ -1012,7 +1087,7 @@ const AllocationUI = {
     };
     const seed = document.getElementById('allocSeedInput').value.trim() || 'SOISDS-2026';
     AppState.settings.weights = weights; AppState.settings.shuffleSeed = seed;
-    AppState.settings.locked = false; AppState.settings.published = false;
+    AppState.settings.locked = false;
     try {
       const { allocations, teamMeta } = AllocationEngine.runGlobalOptimization(weights, seed);
       AppState.allocations = allocations; AppState.teamMeta = teamMeta;
@@ -1023,16 +1098,17 @@ const AllocationUI = {
         allocations: JSON.parse(JSON.stringify(allocations)), teamMeta: JSON.parse(JSON.stringify(teamMeta)), sixGameTeams: [...AppState.sixGameTeams]
       });
       await DataRepository.saveState(['allocations','teamMeta','settings','allocationVersions']);
-      await DataRepository.logAudit('ALLOC_GENERATE', `Generated ${ver} with seed ${seed}.`);
-      this.render(); App.refreshAllUI(); Utils.toast(`Generated ${ver} successfully!`, 'success');
+      await DataRepository.logAudit('ALLOC_GENERATE', `Generated Draft ${ver} with seed ${seed}.`);
+      this.render(); App.refreshAllUI(); Utils.toast(`Generated Draft ${ver}. Validate and click Approve & Publish when ready.`, 'success');
     } catch (err) { Utils.toast(err.message, 'error'); }
   },
   async approveAndPublish() {
     const val = ValidationEngine.validateAll();
     if (!val.allPassed) { Utils.toast('Cannot publish: fix validation failures first.', 'error'); return; }
+    AppState.publishedAllocations = JSON.parse(JSON.stringify(AppState.allocations));
     AppState.settings.published = true;
     if (AppState.allocationVersions[0]) AppState.allocationVersions[0].status = 'Published';
-    await DataRepository.saveState(['settings','allocationVersions']);
+    await DataRepository.saveState(['publishedAllocations','settings','allocationVersions']);
     await DataRepository.logAudit('ALLOC_PUBLISH', 'Approved and published allocation to Team Leader Portal.');
     App.refreshAllUI(); Utils.toast('Allocation Approved & Published!', 'success');
   },
@@ -1363,6 +1439,30 @@ const TestSuite = {
    ======================================================================== */
 const App = {
   async autoHydrateRoster() {
+    // 1. Try loading published-data.json (contains real 1,750 games, 263 sanitized teams, and published allocation)
+    try {
+      const pubRes = await fetch('./published-data.json');
+      if (pubRes.ok) {
+        const pub = await pubRes.json();
+        if (Array.isArray(pub.games) && pub.games.length === 1750 && Array.isArray(pub.teams) && pub.teams.length === 263 && Array.isArray(pub.publishedAllocations) && pub.publishedAllocations.length === 1750) {
+          if (AppState.games.length === 0) AppState.games = pub.games;
+          if (AppState.teams.length === 0) AppState.teams = pub.teams;
+          if (AppState.publishedAllocations.length === 0) {
+            AppState.publishedAllocations = pub.publishedAllocations;
+            AppState.allocations = pub.publishedAllocations;
+            AppState.teamMeta = pub.teamMeta || {};
+            AppState.sixGameTeams = pub.sixGameTeams || [];
+            AppState.settings.published = true;
+          }
+          await DataRepository.saveState(['games','teams','allocations','publishedAllocations','teamMeta','sixGameTeams','settings']);
+          this.refreshAllUI();
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('published-data.json not loaded:', err.message);
+    }
+    // 2. Fallback: load 263-team roster directly from deployed PDF
     if (AppState.teams.length === 263) return true;
     try {
       const res = await fetch('./SoISDS-2D_Games_Team_Leaders_with_Mentors_T001-T263-v2.pdf');
@@ -1384,7 +1484,7 @@ const App = {
     if (localStorage.getItem(LS_KEYS.THEME) === 'light') document.documentElement.classList.replace('dark', 'light');
     await DataRepository.init();
     await DataRepository.loadAll();
-    if (AppState.teams.length === 0 && !AppState.settings.apiBaseUrl && window.location.protocol.startsWith('http')) {
+    if ((AppState.teams.length === 0 || !AppState.settings.published) && !AppState.settings.apiBaseUrl && window.location.protocol.startsWith('http')) {
       await this.autoHydrateRoster();
     }
     LibraryModule.init(); GameManager.init(); TeamManager.init(); PreviewModule.init();
