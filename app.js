@@ -1956,6 +1956,7 @@ const App = {
     const isDark = document.documentElement.classList.contains('dark');
     document.documentElement.classList.replace(isDark ? 'dark' : 'light', isDark ? 'light' : 'dark');
     localStorage.setItem(LS_KEYS.THEME, isDark ? 'light' : 'dark');
+    document.getElementById('themeSwitchBtn')?.setAttribute('aria-checked', String(!isDark));
   },
   navigate(sec) {
     if (sec === 'admin-dashboard' && !AuthModule.isAuthenticated()) sec = 'admin-login';

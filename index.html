@@ -43,8 +43,14 @@
       </nav>
 
       <div class="nav-actions">
-        <button class="btn btn-icon-ghost" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode" aria-label="Toggle Theme">
-          <i data-lucide="sun-moon" width="16"></i>
+        <button class="theme-switch" id="themeSwitchBtn" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode" aria-label="Toggle Light/Dark Mode" role="switch" aria-checked="false">
+          <span class="theme-switch-icon theme-switch-sun" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          </span>
+          <span class="theme-switch-icon theme-switch-moon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M14.5 3.5a8.5 8.5 0 1 0 6 14.5 7 7 0 0 1-6-14.5z"/><path d="M17.5 4.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6.6-1.4zM20.5 9l.4.9.9.4-.9.4-.4.9-.4-.9-.9-.4.9-.4.4-.9z"/></svg>
+          </span>
+          <span class="theme-switch-knob"></span>
         </button>
         <span class="nav-pill-meta" id="brandAcadYear">2026–27</span>
         <button class="btn btn-primary btn-pill nav-cta-desktop" onclick="App.navigate('lookup')">Find Games</button>
