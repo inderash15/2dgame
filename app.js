@@ -957,21 +957,21 @@ const AdminUI = {
 
     const genres = {}; AppState.games.forEach(g => { genres[g.genre] = (genres[g.genre] || 0) + 1; });
     const topG = Object.entries(genres).sort((a, b) => b[1] - a[1]).slice(0, 12);
-    mk('chartGenre', 'bar', topG.map(x => x[0]), topG.map(x => x[1]), '#8b5cf6');
+    mk('chartGenre', 'bar', topG.map(x => x[0]), topG.map(x => x[1]), '#D4A64A');
 
     const diffs = { Easy: 0, Medium: 0, Hard: 0 }; AppState.games.forEach(g => { diffs[g.difficulty] = (diffs[g.difficulty] || 0) + 1; });
-    mk('chartDifficulty', 'doughnut', Object.keys(diffs), Object.values(diffs), ['#10b981', '#f59e0b', '#f43f5e']);
+    mk('chartDifficulty', 'doughnut', Object.keys(diffs), Object.values(diffs), ['#059669', '#D4A64A', '#B98532']);
 
-    mk('chartAllocDist', 'doughnut', ['7-Game Teams', '6-Game Teams'], [val.t7, val.t6], ['#3b82f6', '#8b5cf6']);
+    mk('chartAllocDist', 'doughnut', ['7-Game Teams', '6-Game Teams'], [val.t7, val.t6], ['#D4A64A', '#24262B']);
 
     const mTeams = {}; AppState.teams.forEach(t => { const m = t.facultyMentor || 'Unassigned'; mTeams[m] = (mTeams[m] || 0) + 1; });
     const topM = Object.entries(mTeams).sort((a, b) => b[1] - a[1]);
-    mk('chartMentorTeams', 'bar', topM.map(x => x[0]), topM.map(x => x[1]), '#2563eb');
+    mk('chartMentorTeams', 'bar', topM.map(x => x[0]), topM.map(x => x[1]), '#F0B44D');
 
-    mk('chartStudentProgress', 'doughnut', ['Not Started', 'In Progress', 'Completed'], [ns, ip, cp], ['#94a3b8', '#2563eb', '#059669']);
+    mk('chartStudentProgress', 'doughnut', ['Not Started', 'In Progress', 'Completed'], [ns, ip, cp], ['#777777', '#F0B44D', '#059669']);
 
     const dTeams = {}; AppState.teams.forEach(t => { dTeams[t.department] = (dTeams[t.department] || 0) + 1; });
-    mk('chartDeptTeams', 'bar', Object.keys(dTeams), Object.values(dTeams), '#10b981');
+    mk('chartDeptTeams', 'bar', Object.keys(dTeams), Object.values(dTeams), '#B98532');
   }
 };
 
