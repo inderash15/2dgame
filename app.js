@@ -151,7 +151,7 @@ const DataRepository = {
       if (!username) continue;
       const existing = byDisplay.get(t.facultyMentor);
       if (existing) {
-        if (existing.username !== username && !existing.lastLoginAt) existing.username = username;
+        if (existing.username !== username && existing.username.includes('.')) existing.username = username;
         continue;
       }
       byDisplay.set(t.facultyMentor, {
@@ -971,21 +971,21 @@ const AdminUI = {
 
     const genres = {}; AppState.games.forEach(g => { genres[g.genre] = (genres[g.genre] || 0) + 1; });
     const topG = Object.entries(genres).sort((a, b) => b[1] - a[1]).slice(0, 12);
-    mk('chartGenre', 'bar', topG.map(x => x[0]), topG.map(x => x[1]), '#D4A64A');
+    mk('chartGenre', 'bar', topG.map(x => x[0]), topG.map(x => x[1]), '#C9A45A');
 
     const diffs = { Easy: 0, Medium: 0, Hard: 0 }; AppState.games.forEach(g => { diffs[g.difficulty] = (diffs[g.difficulty] || 0) + 1; });
-    mk('chartDifficulty', 'doughnut', Object.keys(diffs), Object.values(diffs), ['#059669', '#D4A64A', '#B98532']);
+    mk('chartDifficulty', 'doughnut', Object.keys(diffs), Object.values(diffs), ['#777777', '#C9A45A', '#292A2D']);
 
-    mk('chartAllocDist', 'doughnut', ['7-Game Teams', '6-Game Teams'], [val.t7, val.t6], ['#D4A64A', '#24262B']);
+    mk('chartAllocDist', 'doughnut', ['7-Game Teams', '6-Game Teams'], [val.t7, val.t6], ['#C9A45A', '#292A2D']);
 
     const mTeams = {}; AppState.teams.forEach(t => { const m = t.facultyMentor || 'Unassigned'; mTeams[m] = (mTeams[m] || 0) + 1; });
     const topM = Object.entries(mTeams).sort((a, b) => b[1] - a[1]);
-    mk('chartMentorTeams', 'bar', topM.map(x => x[0]), topM.map(x => x[1]), '#F0B44D');
+    mk('chartMentorTeams', 'bar', topM.map(x => x[0]), topM.map(x => x[1]), '#777777');
 
-    mk('chartStudentProgress', 'doughnut', ['Not Started', 'In Progress', 'Completed'], [ns, ip, cp], ['#777777', '#F0B44D', '#059669']);
+    mk('chartStudentProgress', 'doughnut', ['Not Started', 'In Progress', 'Completed'], [ns, ip, cp], ['#E8E5DE', '#C9A45A', '#059669']);
 
     const dTeams = {}; AppState.teams.forEach(t => { dTeams[t.department] = (dTeams[t.department] || 0) + 1; });
-    mk('chartDeptTeams', 'bar', Object.keys(dTeams), Object.values(dTeams), '#B98532');
+    mk('chartDeptTeams', 'bar', Object.keys(dTeams), Object.values(dTeams), '#A9823E');
   }
 };
 
@@ -1653,10 +1653,39 @@ const MentorPortal = {
     e.preventDefault();
     const username = document.getElementById('mentorUsername').value.trim().toLowerCase();
     const password = document.getElementById('mentorPassword').value;
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/mentor/login`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { Utils.toast(data.error || 'Invalid mentor credentials.', 'error'); return; }
+        sessionStorage.setItem(LS_KEYS.MENTOR_SESSION, JSON.stringify({
+          authenticated: true, username: data.username, displayName: data.displayName, mustChangePassword: Boolean(data.mustChangePassword), curPass: password
+        }));
+        if (data.mustChangePassword) {
+          document.getElementById('mentorLoginBox').style.display = 'none';
+          document.getElementById('mentorForceChangeBox').style.display = 'block';
+          Utils.toast('Temporary password detected. Please set a new password.', 'warn');
+          return;
+        }
+        this.syncNav(); App.navigate('mentor-dashboard'); Utils.toast(`Welcome, ${data.displayName}`, 'success');
+        return;
+      } catch (err) {
+        Utils.toast('Backend unreachable: ' + err.message, 'error');
+        return;
+      }
+    }
+
     if (AppState.teams.length === 0 && window.location.protocol.startsWith('http')) await App.autoHydrateRoster();
     DataRepository.syncMentorsFromTeams();
+    await DataRepository.saveState(['mentors']);
 
-    const mentor = AppState.mentors.find(m => m.username === username);
+    const mentor = AppState.mentors.find(m => m.username === username || Utils.normalizeMentorUsername(m.displayName) === username);
     if (!mentor || !mentor.active || mentor.passwordHash !== AuthModule.hashPass(password)) {
       Utils.toast('Invalid mentor username/password or inactive account.', 'error');
       return;
@@ -1682,9 +1711,18 @@ const MentorPortal = {
     const p2 = document.getElementById('mentorConfirmPass').value;
     if (p1 !== p2) { Utils.toast('Passwords do not match.', 'error'); return; }
     const s = this.getSession(); if (!s) return;
+    const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/mentor/change-password`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: s.curPass || 'pass123', newPassword: p1 })
+      });
+      if (!res.ok) { const d = await res.json().catch(()=>({})); Utils.toast(d.error || 'Password update failed.', 'error'); return; }
+    }
     const m = AppState.mentors.find(x => x.username === s.username);
     if (m) { m.passwordHash = AuthModule.hashPass(p1); m.mustChangePassword = false; await DataRepository.saveState(['mentors']); }
-    s.mustChangePassword = false;
+    s.mustChangePassword = false; delete s.curPass;
     sessionStorage.setItem(LS_KEYS.MENTOR_SESSION, JSON.stringify(s));
     document.getElementById('mentorForceChangeBox').style.display = 'none';
     document.getElementById('mentorLoginBox').style.display = 'block';
