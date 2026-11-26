@@ -81,7 +81,7 @@ const AppState = {
     institutionName: 'School of Intelligent Systems & Data Science — 2D Game Event',
     academicYear: '2026–27',
     publicPortalEnabled: true,
-    apiBaseUrl: '',
+    apiBaseUrl: (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')) ? 'https://twodgame-epcz.onrender.com' : '',
     shuffleSeed: 'SOISDS-2026-SEED-01',
     weights: { category: 25, difficulty: 20, mechanic: 20, department: 15, concept: 10, feasibility: 10 },
     published: false,

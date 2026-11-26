@@ -150,7 +150,11 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
   const token = signToken({ username: admin.username, role: admin.role, exp: Date.now() + 8 * 3600 * 1000 });
-  res.cookie('gh_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+  res.cookie('gh_session', token, {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
   await AuditLog.create({ action: 'ADMIN_LOGIN', details: `Admin ${username} signed in`, actor: username, ip: req.ip });
   res.json({ ok: true, username: admin.username, role: admin.role });
 });
@@ -222,7 +226,11 @@ app.post('/api/mentor/login', async (req, res) => {
   await mentor.save();
 
   const token = signToken({ username: mentor.username, displayName: mentor.displayName, role: 'faculty_mentor', exp: Date.now() + 8 * 3600 * 1000 });
-  res.cookie('gh_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+  res.cookie('gh_session', token, {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: process.env.NODE_ENV === 'production'
+  });
   await AuditLog.create({ action: 'MENTOR_LOGIN', details: `Mentor ${username} signed in`, actor: username, ip: req.ip });
   res.json({ ok: true, username: mentor.username, displayName: mentor.displayName, mustChangePassword: mentor.mustChangePassword });
 });
