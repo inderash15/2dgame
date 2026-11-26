@@ -19,6 +19,8 @@ const GameSchema = new mongoose.Schema({
   uniquenessCheck: String,
   archived: { type: Boolean, default: false }
 }, { timestamps: true });
+GameSchema.index({ archived: 1, genre: 1 });
+GameSchema.index({ archived: 1, difficulty: 1 });
 
 const TeamSchema = new mongoose.Schema({
   teamId: { type: String, required: true, unique: true, index: true, uppercase: true, trim: true },
@@ -40,6 +42,8 @@ const TeamSchema = new mongoose.Schema({
   progressRemarks: { type: String, default: '' },
   lastProgressUpdate: Date
 }, { timestamps: true });
+TeamSchema.index({ facultyMentor: 1, teamId: 1 });
+TeamSchema.index({ department: 1, progressStatus: 1 });
 
 const MentorSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
@@ -65,6 +69,7 @@ const ProgressUpdateSchema = new mongoose.Schema({
   feedback: String,
   reviewDate: String
 }, { timestamps: true });
+ProgressUpdateSchema.index({ teamId: 1, createdAt: -1 });
 
 const AllocationSchema = new mongoose.Schema({
   version: { type: String, required: true, index: true },
@@ -79,6 +84,7 @@ const AllocationSchema = new mongoose.Schema({
   sixGameTeams: [String],
   createdBy: String
 }, { timestamps: true });
+AllocationSchema.index({ status: 1, createdAt: -1 });
 
 const AdminUserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
