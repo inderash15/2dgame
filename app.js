@@ -738,10 +738,22 @@ const UserPortal = {
     // 1. Try Backend API if configured
     if (apiBase) {
       try {
-        area.innerHTML = `<div class="alert-box alert-info">Fetching ${Utils.escapeHtml(teamId)} from backend API...</div>`;
-        const res = await fetch(`${apiBase}/api/portal/team/${encodeURIComponent(teamId)}`);
+        area.innerHTML = `<div class="alert-box alert-info">Loading team details for <strong>${Utils.escapeHtml(teamId)}</strong>...</div>`;
+        const res = await fetch(`${apiBase}/api/portal/team/${encodeURIComponent(teamId)}`, { cache: 'no-store' });
+        if (res.status === 401) {
+          area.innerHTML = `<div class="alert-box alert-danger">Your session has expired. Please log in again.</div>`; return;
+        }
+        if (res.status === 403) {
+          area.innerHTML = `<div class="alert-box alert-danger">You do not have permission to view these details.</div>`; return;
+        }
         if (res.status === 404) {
           area.innerHTML = `<div class="alert-box alert-danger">Team <strong>${Utils.escapeHtml(teamId)}</strong> not found in roster.</div>`; return;
+        }
+        if (res.status === 429) {
+          area.innerHTML = `<div class="alert-box alert-warn">Server busy (rate limit). Please wait a moment and <button type="button" class="btn btn-secondary btn-sm" onclick="UserPortal.lookupTeam('${Utils.escapeHtml(teamId)}')">Retry</button></div>`; return;
+        }
+        if (res.status >= 500) {
+          area.innerHTML = `<div class="alert-box alert-danger">Server temporarily unavailable. <button type="button" class="btn btn-secondary btn-sm" onclick="UserPortal.lookupTeam('${Utils.escapeHtml(teamId)}')">Retry</button></div>`; return;
         }
         if (res.ok) {
           const data = await res.json();
@@ -751,7 +763,8 @@ const UserPortal = {
           anns = data.announcements || [];
         }
       } catch (err) {
-        console.warn('Backend lookup fallback to local/static roster:', err.message);
+        const reqId = '';
+        console.warn('Backend lookup fallback to static roster:', err.message, reqId);
       }
     }
 
@@ -834,6 +847,7 @@ const UserPortal = {
 };
 
 function GameCardHTML(g) {
+  const tid = UserPortal.currentTeam?.teamId || UserPortal.currentTeam?.teamNumber || '';
   return `
     <div class="surface-card interactive game-card">
       <div>
@@ -843,14 +857,50 @@ function GameCardHTML(g) {
         <div class="text-xs text-muted mb-1"><strong>Mechanic:</strong> ${Utils.escapeHtml(g.coreMechanic)}</div>
         <p class="game-card-desc">${Utils.escapeHtml(g.description)}</p>
       </div>
-      <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="ModalUI.openGame('${Utils.escapeHtml(g.gameId)}')">View Full Details</button>
+      <button type="button" class="btn btn-secondary btn-sm js-view-details" data-game-id="${Utils.escapeHtml(g.gameId)}" data-team-id="${Utils.escapeHtml(tid)}" style="width:100%;">View Full Details</button>
     </div>`;
 }
 
 const ModalUI = {
-  openGame(gid) {
-    const g = (UserPortal.currentGames || []).find(x => x.gameId === gid) || AppState.games.find(x => x.gameId === gid);
-    if (!g) { Utils.toast('Game details not loaded yet.', 'warn'); return; }
+  _loading: false,
+  async openGame(gid, teamId = '') {
+    if (this._loading) return;
+    let g = (UserPortal.currentGames || []).find(x => x.gameId === gid) || AppState.games.find(x => x.gameId === gid);
+
+    if (!g && teamId) {
+      const apiBase = (AppState.settings.apiBaseUrl || '').replace(/\/+$/, '');
+      if (apiBase) {
+        this._loading = true;
+        this.openCustom('Loading...', '<div class="alert-box alert-info">Loading team details...</div>');
+        try {
+          const res = await fetch(`${apiBase}/api/portal/team/${encodeURIComponent(teamId)}`, { cache: 'no-store' });
+          if (res.status === 401) throw new Error('Your session has expired. Please log in again.');
+          if (res.status === 403) throw new Error('You do not have permission to view these details.');
+          if (res.status === 404) throw new Error('This team does not have published allocations.');
+          if (res.status === 429) throw new Error('Too many requests. Please wait and retry.');
+          if (!res.ok) throw new Error('Server temporarily unavailable.');
+          const data = await res.json();
+          if (Array.isArray(data.games)) {
+            UserPortal.currentGames = data.games;
+            g = data.games.find(x => x.gameId === gid);
+          }
+        } catch (err) {
+          this._loading = false;
+          this.openCustom('Unable to Load Details', `
+            <div class="alert-box alert-danger mb-2">${Utils.escapeHtml(err.message || 'Unable to load team details. Please retry.')}</div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="ModalUI.openGame('${Utils.escapeHtml(gid)}', '${Utils.escapeHtml(teamId)}')">Retry</button>
+          `);
+          return;
+        } finally {
+          this._loading = false;
+        }
+      }
+    }
+
+    if (!g) {
+      this.openCustom('Details Unavailable', '<div class="alert-box alert-warn">Unable to load game details. Please retry.</div>');
+      return;
+    }
     document.getElementById('modalTitle').textContent = `${g.gameId}: ${g.title}`;
     const fields = [
       ['Genre / Category', g.genre], ['Difficulty', g.difficulty], ['Core Mechanic', g.coreMechanic],
@@ -1936,6 +1986,17 @@ const App = {
     }
     LibraryModule.init(); GameManager.init(); TeamManager.init(); PreviewModule.init();
     AuthModule.syncNav(); MentorPortal.syncNav(); AuthModule.renderAuthView(); this.refreshAllUI();
+    if (!this._delegatedClickBound) {
+      this._delegatedClickBound = true;
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.js-view-details');
+        if (!btn) return;
+        e.preventDefault();
+        const gid = btn.getAttribute('data-game-id');
+        const tid = btn.getAttribute('data-team-id') || '';
+        if (gid) ModalUI.openGame(gid, tid);
+      });
+    }
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeMobileDrawer(); ModalUI.close(); } });
     lucide.createIcons();
   },

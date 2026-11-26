@@ -103,6 +103,10 @@ const rlAdminSensitive = makeLimiter({ windowMs: 60 * 1000, max: Number(process.
 const rlImport = makeLimiter({ windowMs: 15 * 60 * 1000, max: Number(process.env.RL_IMPORT_MAX) || 5, name: 'import' });
 const rlProgress = makeLimiter({ windowMs: 60 * 1000, max: Number(process.env.RL_PROGRESS_MAX) || 30, name: 'progress' });
 
+app.use('/api/', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 app.use('/api/', rlStandard);
 app.use(express.static(path.resolve(__dirname, '..')));
 
