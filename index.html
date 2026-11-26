@@ -22,16 +22,16 @@
 </head>
 <body>
 
-  <!-- TOP NAVIGATION (VISION-INSPIRED FLOATING PILL) -->
+  <!-- TOP NAVIGATION -->
   <header class="navbar no-print">
     <div class="container navbar-inner">
       <div class="brand" onclick="App.navigate('home')">
         <span class="brand-wordmark"><span class="brand-light">SoISDS</span> <strong id="brandPlatformName">GameHub</strong></span>
       </div>
 
-      <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Toggle Menu"><i data-lucide="menu"></i></button>
+      <span class="mobile-page-title" id="mobilePageTitle">Home</span>
 
-      <nav class="nav-links nav-pill-center" id="mainNavLinks">
+      <nav class="nav-links nav-pill-center" id="mainNavLinks" aria-label="Primary Navigation">
         <button class="nav-btn active" data-nav="home" onclick="App.navigate('home')">Home</button>
         <button class="nav-btn" data-nav="lookup" onclick="App.navigate('lookup')">Team Portal</button>
         <button class="nav-btn" data-nav="mentor-login" id="navMentorBtn" onclick="App.navigate('mentor-login')">Mentor Portal</button>
@@ -47,10 +47,38 @@
           <i data-lucide="sun-moon" width="16"></i>
         </button>
         <span class="nav-pill-meta" id="brandAcadYear">2026–27</span>
-        <button class="btn btn-primary btn-pill" onclick="App.navigate('lookup')">Find Games</button>
+        <button class="btn btn-primary btn-pill nav-cta-desktop" onclick="App.navigate('lookup')">Find Games</button>
+        <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Open Navigation Menu" aria-expanded="false" onclick="App.openMobileDrawer()">
+          <i data-lucide="menu" width="20"></i>
+        </button>
       </div>
     </div>
   </header>
+
+  <!-- MOBILE SLIDE-OUT DRAWER -->
+  <div class="mobile-drawer-backdrop no-print" id="mobileDrawerBackdrop" onclick="App.closeMobileDrawer()"></div>
+  <aside class="mobile-drawer no-print" id="mobileDrawer" aria-label="Mobile Navigation" aria-hidden="true">
+    <div class="mobile-drawer-header">
+      <span class="brand-wordmark"><span class="brand-light">SoISDS</span> <strong>GameHub</strong></span>
+      <button class="btn btn-icon-ghost" id="mobileDrawerClose" aria-label="Close Navigation Menu" onclick="App.closeMobileDrawer()">
+        <i data-lucide="x" width="18"></i>
+      </button>
+    </div>
+    <nav class="mobile-drawer-links">
+      <button class="drawer-btn" data-nav="home" onclick="App.navigate('home')"><i data-lucide="home" width="18"></i> Home</button>
+      <button class="drawer-btn" data-nav="lookup" onclick="App.navigate('lookup')"><i data-lucide="compass" width="18"></i> Team Leader Portal</button>
+      <button class="drawer-btn" data-nav="mentor-login" id="drawerMentorBtn" onclick="App.navigate('mentor-login')"><i data-lucide="graduation-cap" width="18"></i> Faculty Mentor Portal</button>
+      <button class="drawer-btn" data-nav="mentor-dashboard" id="drawerMentorDashBtn" style="display:none;" onclick="App.navigate('mentor-dashboard')"><i data-lucide="graduation-cap" width="18"></i> Mentor Dashboard</button>
+      <button class="drawer-btn" data-nav="library" onclick="App.navigate('library')"><i data-lucide="library" width="18"></i> Game Catalog (1,750)</button>
+      <button class="drawer-btn" data-nav="admin-login" id="drawerLoginBtn" onclick="App.navigate('admin-login')"><i data-lucide="shield" width="18"></i> Admin Portal</button>
+      <button class="drawer-btn" data-nav="admin-dashboard" id="drawerDashboardBtn" style="display:none;" onclick="App.navigate('admin-dashboard')"><i data-lucide="layout-dashboard" width="18"></i> Admin Dashboard</button>
+    </nav>
+    <div class="mobile-drawer-footer">
+      <button class="btn btn-secondary" style="width:100%;" onclick="App.toggleTheme(); App.closeMobileDrawer();">
+        <i data-lucide="sun-moon" width="16"></i> Switch Light / Dark Theme
+      </button>
+    </div>
+  </aside>
 
   <main>
     <!-- SECTION 1: HOMEPAGE -->
@@ -607,13 +635,13 @@
             <div class="brand-icon" style="width:38px;height:38px;border-radius:10px;background:var(--btn-primary-bg);color:var(--btn-primary-fg);display:grid;place-items:center;"><i data-lucide="graduation-cap"></i></div>
             <div>
               <h2 style="font-size:1.4rem;">Faculty Mentor Portal</h2>
-              <p class="text-muted text-xs">Sign in with your normalized mentor username (e.g., <code>rubadevi.g</code> or <code>dr.k.priya</code>)</p>
+              <p class="text-muted text-xs">Sign in with your simple mentor username (e.g., <code>priya</code> or <code>rubadevi</code>)</p>
             </div>
           </div>
 
           <div id="mentorLoginBox">
             <form onsubmit="MentorPortal.handleLogin(event)">
-              <div class="form-group"><label class="form-label">Mentor Username</label><input type="text" id="mentorUsername" class="form-control" autocomplete="username" placeholder="e.g., dr.k.priya" required /></div>
+              <div class="form-group"><label class="form-label">Mentor Username</label><input type="text" id="mentorUsername" class="form-control" autocomplete="username" placeholder="e.g., priya" required /></div>
               <div class="form-group"><label class="form-label">Password (Initial: pass123)</label><input type="password" id="mentorPassword" class="form-control" autocomplete="current-password" required /></div>
               <button type="submit" class="btn btn-primary btn-pill" style="width:100%;">Sign In to Mentor Portal</button>
             </form>

@@ -11,7 +11,12 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
 }
 
 function normalizeMentorUsername(name) {
-  return String(name || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '').replace(/\.+/g, '.');
+  let s = String(name || '').trim()
+    .replace(/^(dr|mr|mrs|ms|prof)\.?\s*/i, '')
+    .replace(/^k(?=jayanthi)/i, '')
+    .replace(/^mp\.?\s*/i, '');
+  const parts = s.split(/[\s.]+/).filter(p => p && p.length > 1);
+  return (parts.join('') || s.replace(/[^a-z0-9]/gi, '')).toLowerCase();
 }
 
 async function seed() {

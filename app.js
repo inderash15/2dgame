@@ -21,7 +21,13 @@ const Utils = {
     return String(input || '').trim().toUpperCase();
   },
   normalizeMentorUsername(name) {
-    return String(name || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '').replace(/\.+/g, '.');
+    let s = String(name || '').trim()
+      .replace(/^(dr|mr|mrs|ms|prof)\.?\s*/i, '')
+      .replace(/^k(?=jayanthi)/i, '')
+      .replace(/^mp\.?\s*/i, '');
+    // Split on dots/spaces and drop 1-letter initials
+    const parts = s.split(/[\s.]+/).filter(p => p && p.length > 1);
+    return (parts.join('') || s.replace(/[^a-z0-9]/gi, '')).toLowerCase();
   },
   debounce(fn, wait = 180) {
     let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
@@ -138,12 +144,17 @@ const DataRepository = {
     this.syncMentorsFromTeams();
   },
   syncMentorsFromTeams() {
-    const byUser = new Map((AppState.mentors || []).map(m => [m.username, m]));
+    const byDisplay = new Map((AppState.mentors || []).map(m => [m.displayName, m]));
     for (const t of AppState.teams) {
       if (!t.facultyMentor) continue;
       const username = Utils.normalizeMentorUsername(t.facultyMentor);
-      if (!username || byUser.has(username)) continue;
-      byUser.set(username, {
+      if (!username) continue;
+      const existing = byDisplay.get(t.facultyMentor);
+      if (existing) {
+        if (existing.username !== username && !existing.lastLoginAt) existing.username = username;
+        continue;
+      }
+      byDisplay.set(t.facultyMentor, {
         username,
         displayName: t.facultyMentor,
         department: t.department || '',
@@ -154,7 +165,7 @@ const DataRepository = {
         loginCount: 0
       });
     }
-    AppState.mentors = Array.from(byUser.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    AppState.mentors = Array.from(byDisplay.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
   },
   async saveState(keys = ['games','teams','mentors','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','progressHistory','announcements','auditHistory','settings']) {
     for (const k of keys) await this.set(k, AppState[k]);
@@ -234,6 +245,9 @@ const AuthModule = {
     const ok = this.isAuthenticated();
     document.getElementById('navLoginBtn').style.display = ok ? 'none' : 'inline-flex';
     document.getElementById('navDashboardBtn').style.display = ok ? 'inline-flex' : 'none';
+    const d1 = document.getElementById('drawerLoginBtn'), d2 = document.getElementById('drawerDashboardBtn');
+    if (d1) d1.style.display = ok ? 'none' : 'flex';
+    if (d2) d2.style.display = ok ? 'flex' : 'none';
     if (ok) document.getElementById('adminSessionUser').textContent = JSON.parse(sessionStorage.getItem(LS_KEYS.ADMIN_SESSION) || '{}').username || 'admin';
   }
 };
@@ -1631,6 +1645,9 @@ const MentorPortal = {
     const b1 = document.getElementById('navMentorBtn'), b2 = document.getElementById('navMentorDashBtn');
     if (b1) b1.style.display = ok ? 'none' : 'inline-flex';
     if (b2) b2.style.display = ok ? 'inline-flex' : 'none';
+    const d1 = document.getElementById('drawerMentorBtn'), d2 = document.getElementById('drawerMentorDashBtn');
+    if (d1) d1.style.display = ok ? 'none' : 'flex';
+    if (d2) d2.style.display = ok ? 'flex' : 'none';
   },
   async handleLogin(e) {
     e.preventDefault();
@@ -1880,8 +1897,22 @@ const App = {
     }
     LibraryModule.init(); GameManager.init(); TeamManager.init(); PreviewModule.init();
     AuthModule.syncNav(); MentorPortal.syncNav(); AuthModule.renderAuthView(); this.refreshAllUI();
-    document.getElementById('mobileMenuToggle').addEventListener('click', () => document.getElementById('mainNavLinks').classList.toggle('open'));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeMobileDrawer(); ModalUI.close(); } });
     lucide.createIcons();
+  },
+  openMobileDrawer() {
+    document.getElementById('mobileDrawer')?.classList.add('open');
+    document.getElementById('mobileDrawerBackdrop')?.classList.add('open');
+    document.getElementById('mobileMenuToggle')?.setAttribute('aria-expanded', 'true');
+    document.getElementById('mobileDrawer')?.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('drawer-open');
+  },
+  closeMobileDrawer() {
+    document.getElementById('mobileDrawer')?.classList.remove('open');
+    document.getElementById('mobileDrawerBackdrop')?.classList.remove('open');
+    document.getElementById('mobileMenuToggle')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('mobileDrawer')?.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('drawer-open');
   },
   toggleTheme() {
     const isDark = document.documentElement.classList.contains('dark');
@@ -1893,8 +1924,11 @@ const App = {
     if (sec === 'mentor-dashboard' && !MentorPortal.isAuthenticated()) sec = 'mentor-login';
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.getElementById(`section-${sec}`)?.classList.add('active');
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.nav === sec));
-    document.getElementById('mainNavLinks').classList.remove('open');
+    document.querySelectorAll('.nav-btn, .drawer-btn').forEach(b => b.classList.toggle('active', b.dataset.nav === sec));
+    const titleMap = { home: 'Home', lookup: 'Team Portal', 'mentor-login': 'Mentor Login', 'mentor-dashboard': 'Mentor Portal', library: 'Game Catalog', 'admin-login': 'Admin Login', 'admin-dashboard': 'Admin Portal' };
+    const mTitle = document.getElementById('mobilePageTitle');
+    if (mTitle) mTitle.textContent = titleMap[sec] || 'GAMEHUB';
+    this.closeMobileDrawer();
     if (sec === 'admin-login') AuthModule.renderAuthView();
     if (sec === 'admin-dashboard') AdminUI.renderOverview();
     if (sec === 'mentor-dashboard') MentorPortal.renderDashboard();
