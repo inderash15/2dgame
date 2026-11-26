@@ -28,11 +28,42 @@ const TeamSchema = new mongoose.Schema({
   registerNumber: String,
   leaderClass: String,
   leaderContact: String, // Admin-only: excluded from public/team responses
-  facultyMentor: String,
+  facultyMentor: { type: String, index: true },
   mentorMobile: String,  // Admin-only: excluded from public/team responses
   accessCodeHash: String,
-  progressStatus: { type: String, default: 'Not Started' },
-  progressRemarks: String
+  progressStatus: {
+    type: String,
+    enum: ['Not Started', 'Planning', 'Development In Progress', 'Testing', 'Completed', 'Submitted'],
+    default: 'Not Started'
+  },
+  completionPct: { type: Number, min: 0, max: 100, default: 0 },
+  progressRemarks: { type: String, default: '' },
+  lastProgressUpdate: Date
+}, { timestamps: true });
+
+const MentorSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
+  displayName: { type: String, required: true, unique: true },
+  department: { type: String, default: '' },
+  passwordHash: { type: String, required: true },
+  salt: { type: String, required: true },
+  mustChangePassword: { type: Boolean, default: true },
+  active: { type: Boolean, default: true },
+  lastLoginAt: Date,
+  loginCount: { type: Number, default: 0 }
+}, { timestamps: true });
+
+const ProgressUpdateSchema = new mongoose.Schema({
+  teamId: { type: String, required: true, index: true, uppercase: true },
+  mentorId: { type: String, required: true, index: true },
+  mentorName: { type: String, required: true },
+  previousStatus: String,
+  newStatus: { type: String, required: true },
+  previousPct: { type: Number, default: 0 },
+  newPct: { type: Number, required: true, min: 0, max: 100 },
+  remarks: String,
+  feedback: String,
+  reviewDate: String
 }, { timestamps: true });
 
 const AllocationSchema = new mongoose.Schema({
@@ -75,6 +106,8 @@ const AuditLogSchema = new mongoose.Schema({
 module.exports = {
   Game: mongoose.model('Game', GameSchema),
   Team: mongoose.model('Team', TeamSchema),
+  Mentor: mongoose.model('Mentor', MentorSchema),
+  ProgressUpdate: mongoose.model('ProgressUpdate', ProgressUpdateSchema),
   Allocation: mongoose.model('Allocation', AllocationSchema),
   AdminUser: mongoose.model('AdminUser', AdminUserSchema),
   Announcement: mongoose.model('Announcement', AnnouncementSchema),

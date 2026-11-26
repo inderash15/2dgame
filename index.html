@@ -33,11 +33,13 @@
 
       <nav class="nav-links nav-pill-center" id="mainNavLinks">
         <button class="nav-btn active" data-nav="home" onclick="App.navigate('home')">Home</button>
-        <button class="nav-btn" data-nav="lookup" onclick="App.navigate('lookup')">Portal</button>
+        <button class="nav-btn" data-nav="lookup" onclick="App.navigate('lookup')">Team Portal</button>
+        <button class="nav-btn" data-nav="mentor-login" id="navMentorBtn" onclick="App.navigate('mentor-login')">Mentor Portal</button>
+        <button class="nav-btn" data-nav="mentor-dashboard" id="navMentorDashBtn" style="display:none;" onclick="App.navigate('mentor-dashboard')">Mentor Portal</button>
         <span class="nav-center-emblem" onclick="App.navigate('home')" title="GAMEHUB"><i data-lucide="gamepad-2" width="16"></i></span>
         <button class="nav-btn" data-nav="library" onclick="App.navigate('library')">Catalog</button>
         <button class="nav-btn" data-nav="admin-login" id="navLoginBtn" onclick="App.navigate('admin-login')">Admin</button>
-        <button class="nav-btn" data-nav="admin-dashboard" id="navDashboardBtn" style="display:none;" onclick="App.navigate('admin-dashboard')">Dashboard</button>
+        <button class="nav-btn" data-nav="admin-dashboard" id="navDashboardBtn" style="display:none;" onclick="App.navigate('admin-dashboard')">Admin</button>
       </nav>
 
       <div class="nav-actions">
@@ -234,6 +236,7 @@
             <button class="sidebar-btn active" data-tab="overview" onclick="AdminUI.switchTab('overview')"><i data-lucide="pie-chart" width="16"></i><span class="sidebar-label">Overview</span></button>
             <button class="sidebar-btn" data-tab="games" onclick="AdminUI.switchTab('games')"><i data-lucide="gamepad-2" width="16"></i><span class="sidebar-label">Game Management</span></button>
             <button class="sidebar-btn" data-tab="teams" onclick="AdminUI.switchTab('teams')"><i data-lucide="users" width="16"></i><span class="sidebar-label">Team Management</span></button>
+            <button class="sidebar-btn" data-tab="mentors" onclick="AdminUI.switchTab('mentors')"><i data-lucide="graduation-cap" width="16"></i><span class="sidebar-label">Faculty Mentors</span></button>
 
             <div class="sidebar-group-label">Import & Allocation</div>
             <button class="sidebar-btn" data-tab="import-centre" onclick="AdminUI.switchTab('import-centre')"><i data-lucide="upload-cloud" width="16"></i><span class="sidebar-label">Import & Validation</span></button>
@@ -273,10 +276,14 @@
               <div class="grid-5 mb-2">
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">TOTAL GAMES</div><div class="stat-value mt-1" id="kpiTotalGames">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">TOTAL TEAMS</div><div class="stat-value mt-1" id="kpiTotalTeams">0</div></div>
+                <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">FACULTY MENTORS</div><div class="stat-value mt-1" id="kpiTotalMentors">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">ALLOCATED GAMES</div><div class="stat-value mt-1" style="color:#34d399;" id="kpiAssignedGames">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">UNALLOCATED</div><div class="stat-value mt-1" style="color:#fbbf24;" id="kpiUnassignedGames">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">PUBLISHED</div><div class="stat-value mt-1" style="color:#60a5fa;" id="kpiPublishedCount">0</div></div>
-                <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">PENDING</div><div class="stat-value mt-1" style="color:#f43f5e;" id="kpiPendingCount">0</div></div>
+                <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">PENDING / DRAFT</div><div class="stat-value mt-1" style="color:#f43f5e;" id="kpiPendingCount">0</div></div>
+                <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">NOT STARTED</div><div class="stat-value mt-1" id="kpiProgNotStarted">0</div></div>
+                <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">IN PROGRESS</div><div class="stat-value mt-1" style="color:#2563eb;" id="kpiProgInProgress">0</div></div>
+                <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">COMPLETED</div><div class="stat-value mt-1" style="color:#059669;" id="kpiProgCompleted">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">6-GAME TEAMS</div><div class="stat-value mt-1" style="color:#a78bfa;" id="kpiTeams6">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">7-GAME TEAMS</div><div class="stat-value mt-1" style="color:#22d3ee;" id="kpiTeams7">0</div></div>
                 <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">COMPLETION</div><div class="stat-value mt-1" id="kpiCompletionPct">0%</div></div>
@@ -287,7 +294,8 @@
                 <div class="surface-card chart-box"><h3 class="text-sm mb-1">Games by Genre (Top 12)</h3><div class="chart-canvas-wrap"><canvas id="chartGenre"></canvas></div></div>
                 <div class="surface-card chart-box"><h3 class="text-sm mb-1">Games by Difficulty</h3><div class="chart-canvas-wrap"><canvas id="chartDifficulty"></canvas></div></div>
                 <div class="surface-card chart-box"><h3 class="text-sm mb-1">Allocation Distribution (6 vs 7 Games)</h3><div class="chart-canvas-wrap"><canvas id="chartAllocDist"></canvas></div></div>
-                <div class="surface-card chart-box"><h3 class="text-sm mb-1">Games by Team (Sample T001–T025)</h3><div class="chart-canvas-wrap"><canvas id="chartByTeam"></canvas></div></div>
+                <div class="surface-card chart-box"><h3 class="text-sm mb-1">Faculty Mentor-Wise Team Distribution</h3><div class="chart-canvas-wrap"><canvas id="chartMentorTeams"></canvas></div></div>
+                <div class="surface-card chart-box"><h3 class="text-sm mb-1">Student Project Progress</h3><div class="chart-canvas-wrap"><canvas id="chartStudentProgress"></canvas></div></div>
                 <div class="surface-card chart-box"><h3 class="text-sm mb-1">Department-Wise Team Distribution</h3><div class="chart-canvas-wrap"><canvas id="chartDeptTeams"></canvas></div></div>
               </div>
             </div>
@@ -458,15 +466,42 @@
               </div>
             </div>
 
+            <!-- C2. FACULTY MENTOR MANAGEMENT -->
+            <div id="admin-tab-mentors" class="admin-tab">
+              <div class="flex-between mb-2">
+                <div><h2 style="font-size:1.5rem;">Faculty Mentor Management</h2><p class="text-muted text-sm">Auto-synced from the 263-team PDF roster. Manage accounts, password resets, status, and team reassignments.</p></div>
+                <div class="flex-center">
+                  <button class="btn btn-secondary btn-sm" onclick="MentorAdminModule.openReassignModal()">Reassign Team to Mentor</button>
+                  <button class="btn btn-primary btn-sm" onclick="MentorAdminModule.openCreateModal()"><i data-lucide="user-plus" width="15"></i> Add Mentor</button>
+                </div>
+              </div>
+              <div class="surface-card mb-2" style="padding:1rem;">
+                <input type="text" id="adminMentorSearch" class="form-control" placeholder="Search mentor name or username..." oninput="MentorAdminModule.render()" />
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Mentor Name</th><th>Username</th><th>Teams</th><th>Progress Summary</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+                  <tbody id="adminMentorsTbody"></tbody>
+                </table>
+              </div>
+            </div>
+
             <!-- F. TEAM PROGRESS MANAGEMENT -->
             <div id="admin-tab-progress" class="admin-tab">
               <div class="flex-between mb-2">
-                <div><h2 style="font-size:1.5rem;">Team Progress Management</h2><p class="text-muted text-sm">Track development milestones across all 263 teams.</p></div>
-                <input type="text" id="progressSearch" class="form-control" style="max-width:260px;" placeholder="Filter Team ID or Leader..." oninput="ProgressModule.render()" />
+                <div><h2 style="font-size:1.5rem;">Student Progress Monitoring (263 Teams)</h2><p class="text-muted text-sm">Monitor team progress, completion %, and mentor updates across the entire institution.</p></div>
+              </div>
+              <div class="surface-card mb-2" style="padding:1rem;">
+                <div class="grid-4">
+                  <input type="text" id="progressSearch" class="form-control" placeholder="Filter Team ID or Leader..." oninput="ProgressModule.render()" />
+                  <select id="progressMentorFilter" class="form-control" onchange="ProgressModule.render()"><option value="">All Mentors</option></select>
+                  <select id="progressDeptFilter" class="form-control" onchange="ProgressModule.render()"><option value="">All Departments</option></select>
+                  <select id="progressStatusFilter" class="form-control" onchange="ProgressModule.render()"><option value="">All Statuses</option><option>Not Started</option><option>Planning</option><option>Development In Progress</option><option>Testing</option><option>Completed</option><option>Submitted</option></select>
+                </div>
               </div>
               <div class="table-wrap" style="max-height:520px; overflow-y:auto;">
                 <table>
-                  <thead><tr><th>Team ID</th><th>Leader</th><th>Dept</th><th>Status</th><th>Remarks</th><th>Save</th></tr></thead>
+                  <thead><tr><th>Team ID</th><th>Leader</th><th>Faculty Mentor</th><th>Dept</th><th>Games</th><th>Status</th><th>Completion</th><th>Last Update</th><th>Save</th></tr></thead>
                   <tbody id="progressTbody"></tbody>
                 </table>
               </div>
@@ -558,6 +593,88 @@
             </div>
 
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SECTION 6: FACULTY MENTOR LOGIN
+         ==================================================================== -->
+    <section id="section-mentor-login" class="page-section">
+      <div class="container" style="padding-top:3rem; max-width:520px;">
+        <div class="glass-card" style="padding:2rem;">
+          <div class="flex-center mb-2">
+            <div class="brand-icon" style="width:38px;height:38px;border-radius:10px;background:var(--btn-primary-bg);color:var(--btn-primary-fg);display:grid;place-items:center;"><i data-lucide="graduation-cap"></i></div>
+            <div>
+              <h2 style="font-size:1.4rem;">Faculty Mentor Portal</h2>
+              <p class="text-muted text-xs">Sign in with your normalized mentor username (e.g., <code>rubadevi.g</code> or <code>dr.k.priya</code>)</p>
+            </div>
+          </div>
+
+          <div id="mentorLoginBox">
+            <form onsubmit="MentorPortal.handleLogin(event)">
+              <div class="form-group"><label class="form-label">Mentor Username</label><input type="text" id="mentorUsername" class="form-control" autocomplete="username" placeholder="e.g., dr.k.priya" required /></div>
+              <div class="form-group"><label class="form-label">Password (Initial: pass123)</label><input type="password" id="mentorPassword" class="form-control" autocomplete="current-password" required /></div>
+              <button type="submit" class="btn btn-primary btn-pill" style="width:100%;">Sign In to Mentor Portal</button>
+            </form>
+            <div class="text-xs text-muted mt-2">
+              Forgot or need password reset? Contact the Administrator to reset your temporary password in <em>Faculty Mentor Management</em>.
+            </div>
+          </div>
+
+          <div id="mentorForceChangeBox" style="display:none;">
+            <div class="alert-box alert-warn mb-2">First login detected: You must change your temporary password before accessing your assigned teams.</div>
+            <form onsubmit="MentorPortal.handleForcePasswordChange(event)">
+              <div class="form-group"><label class="form-label">New Password (min 6 chars)</label><input type="password" id="mentorNewPass" class="form-control" autocomplete="new-password" minlength="6" required /></div>
+              <div class="form-group"><label class="form-label">Confirm New Password</label><input type="password" id="mentorConfirmPass" class="form-control" autocomplete="new-password" minlength="6" required /></div>
+              <button type="submit" class="btn btn-primary btn-pill" style="width:100%;">Update Password & Enter Dashboard</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         SECTION 7: FACULTY MENTOR DASHBOARD
+         ==================================================================== -->
+    <section id="section-mentor-dashboard" class="page-section">
+      <div class="container" style="padding-top:1.75rem;">
+        <div class="flex-between mb-3">
+          <div>
+            <span class="badge badge-blue mb-1">Faculty Mentor Portal</span>
+            <h1 style="font-size:1.85rem;" id="mentorWelcomeTitle">Welcome, Faculty Mentor</h1>
+            <p class="text-muted text-sm">Monitor your assigned student teams, inspect their allocated 2D games, and record development progress.</p>
+          </div>
+          <div class="flex-center">
+            <button class="btn btn-secondary btn-sm" onclick="MentorPortal.exportMyReport()"><i data-lucide="file-spreadsheet" width="15"></i> Export My Teams (.xlsx)</button>
+            <button class="btn btn-secondary btn-sm" onclick="MentorPortal.openChangePasswordModal()"><i data-lucide="key" width="15"></i> Change Password</button>
+            <button class="btn btn-danger btn-sm" onclick="MentorPortal.logout()"><i data-lucide="log-out" width="15"></i> Logout</button>
+          </div>
+        </div>
+
+        <div class="grid-3 mb-3" style="grid-template-columns:repeat(auto-fit,minmax(175px,1fr));">
+          <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">MY ASSIGNED TEAMS</div><div class="stat-value mt-1" id="mKpiTeams">0</div></div>
+          <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">TOTAL STUDENTS</div><div class="stat-value mt-1" id="mKpiStudents">0</div></div>
+          <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">ALLOCATED GAMES</div><div class="stat-value mt-1" id="mKpiGames">0</div></div>
+          <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">NOT STARTED</div><div class="stat-value mt-1" id="mKpiNotStarted">0</div></div>
+          <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">IN PROGRESS</div><div class="stat-value mt-1" style="color:#2563eb;" id="mKpiInProgress">0</div></div>
+          <div class="surface-card" style="padding:1rem;"><div class="text-xs text-muted">COMPLETED</div><div class="stat-value mt-1" style="color:#059669;" id="mKpiCompleted">0</div></div>
+        </div>
+
+        <div class="surface-card mb-2" style="padding:1rem;">
+          <div class="grid-4">
+            <input type="text" id="mentorSearchInput" class="form-control" placeholder="Search Team ID or Student Name..." oninput="MentorPortal.renderTeams()" />
+            <select id="mentorDeptFilter" class="form-control" onchange="MentorPortal.renderTeams()"><option value="">All Departments</option></select>
+            <select id="mentorStatusFilter" class="form-control" onchange="MentorPortal.renderTeams()"><option value="">All Statuses</option><option>Not Started</option><option>Planning</option><option>Development In Progress</option><option>Testing</option><option>Completed</option><option>Submitted</option></select>
+            <select id="mentorSortSelect" class="form-control" onchange="MentorPortal.renderTeams()"><option value="id">Sort: Team ID</option><option value="prog_desc">Progress: High → Low</option><option value="prog_asc">Progress: Low → High</option></select>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Team ID</th><th>Team Leader</th><th>Dept</th><th>Class</th><th>Register No</th><th>Games</th><th>Project Status</th><th>Completion</th><th>Action</th></tr></thead>
+            <tbody id="mentorTeamsTbody"></tbody>
+          </table>
         </div>
       </div>
     </section>

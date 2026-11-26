@@ -20,6 +20,9 @@ const Utils = {
     }
     return String(input || '').trim().toUpperCase();
   },
+  normalizeMentorUsername(name) {
+    return String(name || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '').replace(/\.+/g, '.');
+  },
   debounce(fn, wait = 180) {
     let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
   },
@@ -52,17 +55,19 @@ const Utils = {
 /* ========================================================================
    2. INDEXEDDB STORAGE & APPLICATION STATE
    ======================================================================== */
-const LS_KEYS = { ADMIN_AUTH: 'gh_demo_admin_v3', ADMIN_SESSION: 'gh_demo_sess_v3', THEME: 'gh_theme_v3' };
+const LS_KEYS = { ADMIN_AUTH: 'gh_demo_admin_v3', ADMIN_SESSION: 'gh_demo_sess_v3', MENTOR_SESSION: 'gh_mentor_sess_v3', THEME: 'gh_theme_v3' };
 
 const AppState = {
   games: [],
   teams: [],
+  mentors: [],
   allocations: [],
   publishedAllocations: [],
   teamMeta: {},
   sixGameTeams: [],
   allocationVersions: [],
   teamProgress: {},
+  progressHistory: [],
   announcements: [],
   auditHistory: [],
   settings: {
@@ -111,7 +116,7 @@ const DataRepository = {
     });
   },
   async loadAll() {
-    for (const k of ['games','teams','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory']) {
+    for (const k of ['games','teams','mentors','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','progressHistory','announcements','auditHistory']) {
       AppState[k] = await this.get(k, AppState[k]);
     }
     const savedSettings = await this.get('settings', null);
@@ -130,8 +135,28 @@ const DataRepository = {
     if (AppState.settings.published && AppState.publishedAllocations.length === 0 && AppState.allocations.length === 1750) {
       AppState.publishedAllocations = [...AppState.allocations];
     }
+    this.syncMentorsFromTeams();
   },
-  async saveState(keys = ['games','teams','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','announcements','auditHistory','settings']) {
+  syncMentorsFromTeams() {
+    const byUser = new Map((AppState.mentors || []).map(m => [m.username, m]));
+    for (const t of AppState.teams) {
+      if (!t.facultyMentor) continue;
+      const username = Utils.normalizeMentorUsername(t.facultyMentor);
+      if (!username || byUser.has(username)) continue;
+      byUser.set(username, {
+        username,
+        displayName: t.facultyMentor,
+        department: t.department || '',
+        passwordHash: AuthModule.hashPass('pass123'),
+        mustChangePassword: true,
+        active: true,
+        lastLoginAt: null,
+        loginCount: 0
+      });
+    }
+    AppState.mentors = Array.from(byUser.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  },
+  async saveState(keys = ['games','teams','mentors','allocations','publishedAllocations','teamMeta','sixGameTeams','allocationVersions','teamProgress','progressHistory','announcements','auditHistory','settings']) {
     for (const k of keys) await this.set(k, AppState[k]);
   },
   async logAudit(action, details, actor = 'Admin') {
@@ -714,7 +739,8 @@ const UserPortal = {
 
     this.currentTeam = team; this.currentGames = assigned;
     const displayId = team.teamId || team.teamNumber;
-    const prog = AppState.teamProgress[displayId] || { status: team.progressStatus || 'Not Started', remarks: '' };
+    const prog = AppState.teamProgress[displayId] || { status: team.progressStatus || 'Not Started', pct: team.completionPct || 0, remarks: '', updatedAt: team.lastProgressUpdate || '' };
+    const progHistory = (AppState.progressHistory || []).filter(h => h.teamId === displayId);
     const cats = [...new Set(assigned.map(g => g.genre))].sort();
 
     area.innerHTML = `
@@ -724,7 +750,7 @@ const UserPortal = {
           <div class="flex-center">
             <span class="badge badge-purple">${Utils.escapeHtml(displayId)}</span>
             <span class="badge ${isPub ? 'badge-green' : 'badge-amber'}">${isPub ? 'Published (' + assigned.length + ' Games)' : 'Pending Publication'}</span>
-            <span class="badge badge-cyan">Progress: ${Utils.escapeHtml(prog.status)}</span>
+            <span class="badge badge-cyan">Progress: ${Utils.escapeHtml(prog.status)} (${prog.pct || 0}%)</span>
           </div>
           <div class="flex-center no-print">
             <button class="btn btn-secondary btn-sm" onclick="ExportModule.exportTeamPDF('${Utils.escapeHtml(displayId)}')"><i data-lucide="file-down" width="15"></i> Download Team PDF</button>
@@ -739,6 +765,11 @@ const UserPortal = {
           <div><div class="text-xs text-muted">FACULTY MENTOR</div><strong>${Utils.escapeHtml(team.facultyMentor)}</strong></div>
           <div><div class="text-xs text-muted">TOTAL ASSIGNED GAMES</div><strong>${assigned.length}</strong></div>
         </div>
+        ${progHistory.length ? `
+          <div class="mt-2" style="padding-top:0.85rem; border-top:1px solid var(--border-subtle);">
+            <div class="text-xs text-muted mb-1"><strong>MENTOR PROGRESS UPDATES (READ-ONLY)</strong></div>
+            ${progHistory.slice(0, 3).map(h => `<div class="text-xs text-muted">• <strong>${Utils.escapeHtml(h.newStatus)} (${h.newPct}%)</strong> — ${Utils.escapeHtml(h.remarks || 'No remarks')} <em>(${new Date(h.updatedAt).toLocaleString()})</em></div>`).join('')}
+          </div>` : ''}
       </div>
       ${!isPub ? `<div class="alert-box alert-warn">Roster verified for <strong>${Utils.escapeHtml(displayId)}</strong>. Game allocations are currently in Draft mode and have not been published by the Administrator yet.</div>` : `
         <div class="surface-card mb-2 no-print" style="padding:1rem;">
@@ -844,6 +875,7 @@ const AdminUI = {
     if (tab === 'overview') this.renderOverview();
     if (tab === 'games') GameManager.render(1);
     if (tab === 'teams') TeamManager.render(1);
+    if (tab === 'mentors') MentorAdminModule.render();
     if (tab === 'alloc-control') AllocationUI.render();
     if (tab === 'alloc-history') AllocationHistoryModule.render();
     if (tab === 'progress') ProgressModule.render();
@@ -862,10 +894,22 @@ const AdminUI = {
 
     document.getElementById('kpiTotalGames').textContent = totalG;
     document.getElementById('kpiTotalTeams').textContent = AppState.teams.length;
+    document.getElementById('kpiTotalMentors').textContent = AppState.mentors.length;
     document.getElementById('kpiAssignedGames').textContent = allocG;
     document.getElementById('kpiUnassignedGames').textContent = Math.max(0, totalG - allocG);
     document.getElementById('kpiPublishedCount').textContent = pubG;
     document.getElementById('kpiPendingCount').textContent = pendG;
+
+    let ns = 0, ip = 0, cp = 0;
+    AppState.teams.forEach(t => {
+      const st = (AppState.teamProgress[t.teamNumber]?.status || 'Not Started');
+      if (st === 'Not Started') ns++;
+      else if (st === 'Completed' || st === 'Submitted') cp++;
+      else ip++;
+    });
+    document.getElementById('kpiProgNotStarted').textContent = ns;
+    document.getElementById('kpiProgInProgress').textContent = ip;
+    document.getElementById('kpiProgCompleted').textContent = cp;
     document.getElementById('kpiTeams6').textContent = val.t6;
     document.getElementById('kpiTeams7').textContent = val.t7;
     document.getElementById('kpiCompletionPct').textContent = totalG ? Math.round((allocG / totalG) * 100) + '%' : '0%';
@@ -896,9 +940,11 @@ const AdminUI = {
 
     mk('chartAllocDist', 'doughnut', ['7-Game Teams', '6-Game Teams'], [val.t7, val.t6], ['#3b82f6', '#8b5cf6']);
 
-    const tCounts = {}; AppState.allocations.forEach(a => { tCounts[a.teamNumber] = (tCounts[a.teamNumber] || 0) + 1; });
-    const sampleT = AppState.teams.slice(0, 25).map(t => t.teamNumber);
-    mk('chartByTeam', 'bar', sampleT, sampleT.map(t => tCounts[t] || 0), '#06b6d4');
+    const mTeams = {}; AppState.teams.forEach(t => { const m = t.facultyMentor || 'Unassigned'; mTeams[m] = (mTeams[m] || 0) + 1; });
+    const topM = Object.entries(mTeams).sort((a, b) => b[1] - a[1]);
+    mk('chartMentorTeams', 'bar', topM.map(x => x[0]), topM.map(x => x[1]), '#2563eb');
+
+    mk('chartStudentProgress', 'doughnut', ['Not Started', 'In Progress', 'Completed'], [ns, ip, cp], ['#94a3b8', '#2563eb', '#059669']);
 
     const dTeams = {}; AppState.teams.forEach(t => { dTeams[t.department] = (dTeams[t.department] || 0) + 1; });
     mk('chartDeptTeams', 'bar', Object.keys(dTeams), Object.values(dTeams), '#10b981');
@@ -1226,28 +1272,139 @@ const AllocationHistoryModule = {
   }
 };
 
+const MentorAdminModule = {
+  render() {
+    DataRepository.syncMentorsFromTeams();
+    const q = (document.getElementById('adminMentorSearch')?.value || '').toLowerCase();
+    const list = AppState.mentors.filter(m => !q || m.displayName.toLowerCase().includes(q) || m.username.toLowerCase().includes(q));
+    document.getElementById('adminMentorsTbody').innerHTML = list.map(m => {
+      const myTeams = AppState.teams.filter(t => t.facultyMentor === m.displayName);
+      const comp = myTeams.filter(t => ['Completed','Submitted'].includes(AppState.teamProgress[t.teamId]?.status)).length;
+      const inProg = myTeams.filter(t => ['Planning','Development In Progress','Testing'].includes(AppState.teamProgress[t.teamId]?.status)).length;
+      return `<tr>
+        <td><strong>${Utils.escapeHtml(m.displayName)}</strong></td>
+        <td class="mono text-xs">${Utils.escapeHtml(m.username)}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="MentorAdminModule.viewTeams('${Utils.escapeHtml(m.displayName)}')">${myTeams.length} Teams</button></td>
+        <td class="text-xs">${comp} Completed · ${inProg} In Progress</td>
+        <td><span class="badge ${m.active ? 'badge-green' : 'badge-rose'}">${m.active ? 'Active' : 'Inactive'}</span></td>
+        <td class="text-xs text-muted">${m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : 'Never'} (${m.loginCount || 0})</td>
+        <td class="flex-center">
+          <button class="btn btn-secondary btn-sm" onclick="MentorAdminModule.toggleActive('${Utils.escapeHtml(m.username)}')">${m.active ? 'Deactivate' : 'Activate'}</button>
+          <button class="btn btn-warning btn-sm" onclick="MentorAdminModule.resetPass('${Utils.escapeHtml(m.username)}')">Reset Pass</button>
+        </td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="7" class="text-muted">No mentors found.</td></tr>`;
+  },
+  viewTeams(mentorName) {
+    const myTeams = AppState.teams.filter(t => t.facultyMentor === mentorName);
+    ModalUI.openCustom(`Teams Assigned to ${mentorName}`, `
+      <div class="table-wrap"><table><thead><tr><th>Team ID</th><th>Leader</th><th>Dept</th><th>Status</th></tr></thead>
+      <tbody>${myTeams.map(t => `<tr><td class="mono">${Utils.escapeHtml(t.teamId)}</td><td>${Utils.escapeHtml(t.leaderName)}</td><td>${Utils.escapeHtml(t.department)}</td><td>${Utils.escapeHtml(AppState.teamProgress[t.teamId]?.status || 'Not Started')}</td></tr>`).join('')}</tbody></table></div>`);
+  },
+  openCreateModal() {
+    ModalUI.openCustom('Create Faculty Mentor Account', `
+      <form onsubmit="MentorAdminModule.create(event)">
+        <div class="form-group"><label class="form-label">Faculty Mentor Full Name</label><input id="newMentorName" class="form-control" placeholder="e.g., Dr. S. Kumar" required /></div>
+        <div class="form-group"><label class="form-label">Department</label><input id="newMentorDept" class="form-control" placeholder="e.g., AIDS" /></div>
+        <button type="submit" class="btn btn-primary">Create Mentor (Initial Password: pass123)</button>
+      </form>`);
+  },
+  async create(e) {
+    e.preventDefault();
+    const displayName = document.getElementById('newMentorName').value.trim();
+    const department = document.getElementById('newMentorDept').value.trim();
+    const username = Utils.normalizeMentorUsername(displayName);
+    if (AppState.mentors.some(m => m.username === username)) { Utils.toast('Mentor username already exists.', 'warn'); return; }
+    AppState.mentors.push({ username, displayName, department, passwordHash: AuthModule.hashPass('pass123'), mustChangePassword: true, active: true, lastLoginAt: null, loginCount: 0 });
+    await DataRepository.saveState(['mentors']);
+    await DataRepository.logAudit('MENTOR_CREATE', `Created mentor ${username}`);
+    ModalUI.close(); this.render(); Utils.toast(`Created ${username} (pass123)`, 'success');
+  },
+  async toggleActive(username) {
+    const m = AppState.mentors.find(x => x.username === username); if (!m) return;
+    m.active = !m.active;
+    await DataRepository.saveState(['mentors']);
+    await DataRepository.logAudit('MENTOR_STATUS', `${m.active ? 'Activated' : 'Deactivated'} ${username}`);
+    this.render();
+  },
+  async resetPass(username) {
+    const m = AppState.mentors.find(x => x.username === username); if (!m) return;
+    m.passwordHash = AuthModule.hashPass('pass123');
+    m.mustChangePassword = true;
+    await DataRepository.saveState(['mentors']);
+    await DataRepository.logAudit('MENTOR_PASS_RESET', `Reset password for ${username} to pass123`);
+    Utils.toast(`Reset ${username} password to pass123 (forced change on next login).`, 'success');
+  },
+  openReassignModal() {
+    ModalUI.openCustom('Reassign Team to Faculty Mentor', `
+      <form onsubmit="MentorAdminModule.reassign(event)">
+        <div class="form-group"><label class="form-label">Team ID</label><input id="reasTeamId" class="form-control" placeholder="e.g., T001" required /></div>
+        <div class="form-group"><label class="form-label">Target Faculty Mentor</label>
+          <select id="reasMentorName" class="form-control">${AppState.mentors.map(m => `<option value="${Utils.escapeHtml(m.displayName)}">${Utils.escapeHtml(m.displayName)}</option>`).join('')}</select>
+        </div>
+        <button type="submit" class="btn btn-primary">Reassign Team</button>
+      </form>`);
+  },
+  async reassign(e) {
+    e.preventDefault();
+    const tid = Utils.normalizeTeamNumber(document.getElementById('reasTeamId').value);
+    const mentor = document.getElementById('reasMentorName').value;
+    const t = AppState.teams.find(x => x.teamId === tid);
+    if (!t) { Utils.toast('Team not found.', 'error'); return; }
+    t.facultyMentor = mentor;
+    await DataRepository.saveState(['teams']);
+    await DataRepository.logAudit('MENTOR_REASSIGN', `Reassigned ${tid} to ${mentor}`);
+    ModalUI.close(); this.render(); Utils.toast(`Reassigned ${tid} to ${mentor}`, 'success');
+  }
+};
+
 const ProgressModule = {
   render() {
+    const mentors = [...new Set(AppState.teams.map(t => t.facultyMentor).filter(Boolean))].sort();
+    const depts = [...new Set(AppState.teams.map(t => t.department).filter(Boolean))].sort();
+    const mSel = document.getElementById('progressMentorFilter'); const curM = mSel?.value || '';
+    if (mSel) { mSel.innerHTML = `<option value="">All Mentors</option>` + mentors.map(m=>`<option value="${Utils.escapeHtml(m)}">${Utils.escapeHtml(m)}</option>`).join(''); mSel.value = curM; }
+    const dSel = document.getElementById('progressDeptFilter'); const curD = dSel?.value || '';
+    if (dSel) { dSel.innerHTML = `<option value="">All Departments</option>` + depts.map(d=>`<option value="${Utils.escapeHtml(d)}">${Utils.escapeHtml(d)}</option>`).join(''); dSel.value = curD; }
+
     const q = (document.getElementById('progressSearch')?.value || '').toLowerCase();
-    const statuses = ['Not Started','Planning','Development in Progress','Testing','Completed','Submitted'];
-    document.getElementById('progressTbody').innerHTML = AppState.teams.filter(t => !q || t.teamNumber.toLowerCase().includes(q) || t.leaderName.toLowerCase().includes(q)).slice(0, 60).map(t => {
-      const p = AppState.teamProgress[t.teamNumber] || { status: 'Not Started', remarks: '' };
+    const sf = document.getElementById('progressStatusFilter')?.value || '';
+    const statuses = ['Not Started','Planning','Development In Progress','Testing','Completed','Submitted'];
+    const counts = {};
+    (AppState.publishedAllocations.length ? AppState.publishedAllocations : AppState.allocations).forEach(a => { counts[a.teamId || a.teamNumber] = (counts[a.teamId || a.teamNumber] || 0) + 1; });
+
+    const list = AppState.teams.filter(t => {
+      const p = AppState.teamProgress[t.teamId] || { status: 'Not Started', pct: 0 };
+      if (q && !t.teamId.toLowerCase().includes(q) && !t.leaderName.toLowerCase().includes(q)) return false;
+      if (curM && t.facultyMentor !== curM) return false;
+      if (curD && t.department !== curD) return false;
+      if (sf && p.status !== sf) return false;
+      return true;
+    });
+
+    document.getElementById('progressTbody').innerHTML = list.slice(0, 80).map(t => {
+      const p = AppState.teamProgress[t.teamId] || { status: 'Not Started', pct: 0, updatedAt: '' };
       return `<tr>
-        <td class="mono"><strong>${Utils.escapeHtml(t.teamNumber)}</strong></td>
+        <td class="mono"><strong>${Utils.escapeHtml(t.teamId)}</strong></td>
         <td>${Utils.escapeHtml(t.leaderName)}</td>
+        <td class="text-xs">${Utils.escapeHtml(t.facultyMentor)}</td>
         <td>${Utils.escapeHtml(t.department)}</td>
-        <td><select id="progSt_${t.teamNumber}" class="form-control">${statuses.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
-        <td><input id="progRm_${t.teamNumber}" class="form-control" value="${Utils.escapeHtml(p.remarks)}" placeholder="Remarks..." /></td>
-        <td><button class="btn btn-secondary btn-sm" onclick="ProgressModule.save('${t.teamNumber}')">Save</button></td>
+        <td class="mono">${counts[t.teamId] || 0}</td>
+        <td><select id="progSt_${t.teamId}" class="form-control">${statuses.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td><input id="progPct_${t.teamId}" type="number" min="0" max="100" class="form-control" style="width:74px;" value="${p.pct || 0}" /></td>
+        <td class="text-xs text-muted">${p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : '—'}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="ProgressModule.save('${t.teamId}')">Save</button></td>
       </tr>`;
-    }).join('');
+    }).join('') || `<tr><td colspan="9" class="text-muted">No teams match filters.</td></tr>`;
   },
   async save(tNo) {
-    AppState.teamProgress[tNo] = {
-      status: document.getElementById(`progSt_${tNo}`).value,
-      remarks: document.getElementById(`progRm_${tNo}`).value
-    };
-    await DataRepository.saveState(['teamProgress']);
+    const prev = AppState.teamProgress[tNo] || { status: 'Not Started', pct: 0 };
+    const newStatus = document.getElementById(`progSt_${tNo}`).value;
+    const newPct = Math.min(100, Math.max(0, Number(document.getElementById(`progPct_${tNo}`).value) || 0));
+    const now = new Date().toISOString();
+    AppState.teamProgress[tNo] = { status: newStatus, pct: newPct, remarks: prev.remarks || '', updatedAt: now };
+    AppState.progressHistory.unshift({ teamId: tNo, mentorId: 'Admin', previousStatus: prev.status, newStatus, previousPct: prev.pct || 0, newPct, remarks: 'Updated by Admin', updatedAt: now });
+    await DataRepository.saveState(['teamProgress', 'progressHistory']);
     Utils.toast(`Updated progress for ${tNo}`, 'success');
   }
 };
@@ -1437,6 +1594,216 @@ const TestSuite = {
 /* ========================================================================
    9. APP CONTROLLER
    ======================================================================== */
+const MentorPortal = {
+  getSession() {
+    try { return JSON.parse(sessionStorage.getItem(LS_KEYS.MENTOR_SESSION) || 'null'); } catch { return null; }
+  },
+  isAuthenticated() {
+    const s = this.getSession();
+    return Boolean(s && s.authenticated && !s.mustChangePassword);
+  },
+  syncNav() {
+    const ok = this.isAuthenticated();
+    const b1 = document.getElementById('navMentorBtn'), b2 = document.getElementById('navMentorDashBtn');
+    if (b1) b1.style.display = ok ? 'none' : 'inline-flex';
+    if (b2) b2.style.display = ok ? 'inline-flex' : 'none';
+  },
+  async handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('mentorUsername').value.trim().toLowerCase();
+    const password = document.getElementById('mentorPassword').value;
+    if (AppState.teams.length === 0 && window.location.protocol.startsWith('http')) await App.autoHydrateRoster();
+    DataRepository.syncMentorsFromTeams();
+
+    const mentor = AppState.mentors.find(m => m.username === username);
+    if (!mentor || !mentor.active || mentor.passwordHash !== AuthModule.hashPass(password)) {
+      Utils.toast('Invalid mentor username/password or inactive account.', 'error');
+      return;
+    }
+    mentor.lastLoginAt = new Date().toISOString();
+    mentor.loginCount = (mentor.loginCount || 0) + 1;
+    await DataRepository.saveState(['mentors']);
+
+    sessionStorage.setItem(LS_KEYS.MENTOR_SESSION, JSON.stringify({
+      authenticated: true, username: mentor.username, displayName: mentor.displayName, mustChangePassword: Boolean(mentor.mustChangePassword)
+    }));
+    if (mentor.mustChangePassword) {
+      document.getElementById('mentorLoginBox').style.display = 'none';
+      document.getElementById('mentorForceChangeBox').style.display = 'block';
+      Utils.toast('Temporary password detected. Please set a new password.', 'warn');
+      return;
+    }
+    this.syncNav(); App.navigate('mentor-dashboard'); Utils.toast(`Welcome, ${mentor.displayName}`, 'success');
+  },
+  async handleForcePasswordChange(e) {
+    e.preventDefault();
+    const p1 = document.getElementById('mentorNewPass').value;
+    const p2 = document.getElementById('mentorConfirmPass').value;
+    if (p1 !== p2) { Utils.toast('Passwords do not match.', 'error'); return; }
+    const s = this.getSession(); if (!s) return;
+    const m = AppState.mentors.find(x => x.username === s.username);
+    if (m) { m.passwordHash = AuthModule.hashPass(p1); m.mustChangePassword = false; await DataRepository.saveState(['mentors']); }
+    s.mustChangePassword = false;
+    sessionStorage.setItem(LS_KEYS.MENTOR_SESSION, JSON.stringify(s));
+    document.getElementById('mentorForceChangeBox').style.display = 'none';
+    document.getElementById('mentorLoginBox').style.display = 'block';
+    this.syncNav(); App.navigate('mentor-dashboard'); Utils.toast('Password updated! Welcome to Mentor Portal.', 'success');
+  },
+  openChangePasswordModal() {
+    ModalUI.openCustom('Change Mentor Password', `
+      <form onsubmit="MentorPortal.changePassword(event)">
+        <div class="form-group"><label class="form-label">Current Password</label><input type="password" id="mCurP" class="form-control" autocomplete="current-password" required /></div>
+        <div class="form-group"><label class="form-label">New Password (min 6 chars)</label><input type="password" id="mNewP" class="form-control" autocomplete="new-password" minlength="6" required /></div>
+        <button type="submit" class="btn btn-primary">Update Password</button>
+      </form>`);
+  },
+  async changePassword(e) {
+    e.preventDefault();
+    const s = this.getSession(); if (!s) return;
+    const m = AppState.mentors.find(x => x.username === s.username);
+    if (!m || m.passwordHash !== AuthModule.hashPass(document.getElementById('mCurP').value)) { Utils.toast('Current password incorrect.', 'error'); return; }
+    m.passwordHash = AuthModule.hashPass(document.getElementById('mNewP').value);
+    m.mustChangePassword = false;
+    await DataRepository.saveState(['mentors']); ModalUI.close(); Utils.toast('Password updated.', 'success');
+  },
+  logout() {
+    sessionStorage.removeItem(LS_KEYS.MENTOR_SESSION);
+    this.syncNav(); App.navigate('home');
+  },
+  getMyTeams() {
+    const s = this.getSession(); if (!s) return [];
+    return AppState.teams.filter(t => t.facultyMentor === s.displayName);
+  },
+  renderDashboard() {
+    const s = this.getSession(); if (!s) return;
+    document.getElementById('mentorWelcomeTitle').textContent = `Welcome, ${s.displayName}`;
+    const myTeams = this.getMyTeams();
+    const depts = [...new Set(myTeams.map(t => t.department))].sort();
+    const dSel = document.getElementById('mentorDeptFilter'); const curD = dSel.value;
+    dSel.innerHTML = `<option value="">All Departments</option>` + depts.map(d => `<option value="${Utils.escapeHtml(d)}">${Utils.escapeHtml(d)}</option>`).join('');
+    dSel.value = curD;
+
+    const allocList = AppState.publishedAllocations.length ? AppState.publishedAllocations : AppState.allocations;
+    const myTeamIds = new Set(myTeams.map(t => t.teamId));
+    const myGamesCount = allocList.filter(a => myTeamIds.has(a.teamId || a.teamNumber)).length;
+    let ns = 0, ip = 0, cp = 0;
+    myTeams.forEach(t => {
+      const st = AppState.teamProgress[t.teamId]?.status || 'Not Started';
+      if (st === 'Not Started') ns++; else if (st === 'Completed' || st === 'Submitted') cp++; else ip++;
+    });
+    document.getElementById('mKpiTeams').textContent = myTeams.length;
+    document.getElementById('mKpiStudents').textContent = myTeams.length;
+    document.getElementById('mKpiGames').textContent = myGamesCount;
+    document.getElementById('mKpiNotStarted').textContent = ns;
+    document.getElementById('mKpiInProgress').textContent = ip;
+    document.getElementById('mKpiCompleted').textContent = cp;
+    this.renderTeams();
+  },
+  renderTeams() {
+    const q = (document.getElementById('mentorSearchInput')?.value || '').toLowerCase();
+    const df = document.getElementById('mentorDeptFilter')?.value || '';
+    const sf = document.getElementById('mentorStatusFilter')?.value || '';
+    const sort = document.getElementById('mentorSortSelect')?.value || 'id';
+    const allocList = AppState.publishedAllocations.length ? AppState.publishedAllocations : AppState.allocations;
+    const counts = {}; allocList.forEach(a => { const tid = a.teamId || a.teamNumber; counts[tid] = (counts[tid] || 0) + 1; });
+
+    let list = this.getMyTeams().filter(t => {
+      const st = AppState.teamProgress[t.teamId]?.status || 'Not Started';
+      if (q && !t.teamId.toLowerCase().includes(q) && !t.leaderName.toLowerCase().includes(q)) return false;
+      if (df && t.department !== df) return false;
+      if (sf && st !== sf) return false;
+      return true;
+    });
+    if (sort === 'prog_desc') list.sort((a, b) => (AppState.teamProgress[b.teamId]?.pct || 0) - (AppState.teamProgress[a.teamId]?.pct || 0));
+    else if (sort === 'prog_asc') list.sort((a, b) => (AppState.teamProgress[a.teamId]?.pct || 0) - (AppState.teamProgress[b.teamId]?.pct || 0));
+    else list.sort((a, b) => a.teamId.localeCompare(b.teamId));
+
+    document.getElementById('mentorTeamsTbody').innerHTML = list.map(t => {
+      const p = AppState.teamProgress[t.teamId] || { status: 'Not Started', pct: 0 };
+      return `<tr>
+        <td class="mono"><strong>${Utils.escapeHtml(t.teamId)}</strong></td>
+        <td>${Utils.escapeHtml(t.leaderName)}</td>
+        <td>${Utils.escapeHtml(t.department)}</td>
+        <td class="text-xs">${Utils.escapeHtml(t.leaderClass || t.classSheet)}</td>
+        <td class="mono text-xs">${Utils.escapeHtml(t.registerNumber)}</td>
+        <td class="mono">${counts[t.teamId] || 0}</td>
+        <td><span class="badge badge-blue">${Utils.escapeHtml(p.status)}</span></td>
+        <td class="mono">${p.pct || 0}%</td>
+        <td><button class="btn btn-primary btn-sm" onclick="MentorPortal.openTeamDetails('${Utils.escapeHtml(t.teamId)}')">Manage & Games</button></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="9" class="text-muted">No assigned teams match filters.</td></tr>`;
+  },
+  openTeamDetails(teamId) {
+    const s = this.getSession(); if (!s) return;
+    const team = AppState.teams.find(t => t.teamId === teamId);
+    if (!team || team.facultyMentor !== s.displayName) { Utils.toast('Forbidden: You cannot access another mentor\'s team.', 'error'); return; }
+    const gMap = new Map(AppState.games.map(g => [g.gameId, g]));
+    const allocList = AppState.publishedAllocations.length ? AppState.publishedAllocations : AppState.allocations;
+    const games = allocList.filter(a => (a.teamId || a.teamNumber) === teamId).map(a => gMap.get(a.gameId)).filter(Boolean);
+    const p = AppState.teamProgress[teamId] || { status: 'Not Started', pct: 0, remarks: '', updatedAt: '' };
+    const hist = (AppState.progressHistory || []).filter(h => h.teamId === teamId);
+    const statuses = ['Not Started','Planning','Development In Progress','Testing','Completed','Submitted'];
+
+    ModalUI.openCustom(`Team ${teamId} — ${team.leaderName}`, `
+      <div class="grid-3 mb-2" style="padding:0.8rem; background:var(--bg-elevated); border-radius:10px;">
+        <div><div class="text-xs text-muted">TEAM ID</div><strong>${Utils.escapeHtml(team.teamId)}</strong></div>
+        <div><div class="text-xs text-muted">DEPARTMENT / CLASS</div><strong>${Utils.escapeHtml(team.department)} (${Utils.escapeHtml(team.leaderClass || team.classSheet)})</strong></div>
+        <div><div class="text-xs text-muted">REGISTER NO</div><strong class="mono">${Utils.escapeHtml(team.registerNumber)}</strong></div>
+      </div>
+
+      <h3 class="text-sm mb-1">Update Project Progress</h3>
+      <form onsubmit="MentorPortal.saveTeamProgress(event, '${Utils.escapeHtml(teamId)}')" class="mb-3">
+        <div class="grid-3">
+          <div class="form-group"><label class="form-label">Project Status</label><select id="mpStatus" class="form-control">${statuses.map(st=>`<option ${p.status===st?'selected':''}>${st}</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label">Completion % (0–100)</label><input id="mpPct" type="number" min="0" max="100" class="form-control" value="${p.pct || 0}" required /></div>
+          <div class="form-group"><label class="form-label">Review Date</label><input id="mpDate" type="date" class="form-control" value="${new Date().toISOString().slice(0,10)}" /></div>
+        </div>
+        <div class="form-group"><label class="form-label">Progress Remarks & Feedback</label><textarea id="mpRemarks" class="form-control" rows="2" placeholder="Enter milestone remarks & feedback...">${Utils.escapeHtml(p.remarks || '')}</textarea></div>
+        <button type="submit" class="btn btn-primary btn-sm">Save Progress Update</button>
+      </form>
+
+      <h3 class="text-sm mb-1">Assigned Games (${games.length})</h3>
+      <div style="display:grid; gap:0.5rem; max-height:220px; overflow-y:auto;" class="mb-3">
+        ${games.map(g => `<div style="padding:0.6rem; border:1px solid var(--border-subtle); border-radius:8px;"><strong>${Utils.escapeHtml(g.gameId)}: ${Utils.escapeHtml(g.title)}</strong> <span class="badge badge-blue">${Utils.escapeHtml(g.genre)}</span> <span class="badge ${Utils.diffBadgeClass(g.difficulty)}">${Utils.escapeHtml(g.difficulty)}</span><div class="text-xs text-muted mt-1">${Utils.escapeHtml(g.coreMechanic)} — ${Utils.escapeHtml(g.description)}</div></div>`).join('') || '<div class="text-xs text-muted">No games allocated yet.</div>'}
+      </div>
+
+      <h3 class="text-sm mb-1">Progress History (${hist.length})</h3>
+      <div style="max-height:150px; overflow-y:auto;">
+        ${hist.map(h => `<div class="text-xs text-muted mb-1">• <strong>${Utils.escapeHtml(h.previousStatus)} (${h.previousPct}%) → ${Utils.escapeHtml(h.newStatus)} (${h.newPct}%)</strong> | ${Utils.escapeHtml(h.remarks)} <em>[${new Date(h.updatedAt).toLocaleString()}]</em></div>`).join('') || '<div class="text-xs text-muted">No updates recorded yet.</div>'}
+      </div>
+    `);
+  },
+  async saveTeamProgress(e, teamId) {
+    e.preventDefault();
+    const s = this.getSession(); if (!s) return;
+    const team = AppState.teams.find(t => t.teamId === teamId);
+    if (!team || team.facultyMentor !== s.displayName) { Utils.toast('Forbidden.', 'error'); return; }
+    const prev = AppState.teamProgress[teamId] || { status: 'Not Started', pct: 0 };
+    const newStatus = document.getElementById('mpStatus').value;
+    const newPct = Math.min(100, Math.max(0, Number(document.getElementById('mpPct').value) || 0));
+    const remarks = document.getElementById('mpRemarks').value.trim();
+    const reviewDate = document.getElementById('mpDate').value;
+    const now = new Date().toISOString();
+
+    AppState.teamProgress[teamId] = { status: newStatus, pct: newPct, remarks, reviewDate, updatedAt: now };
+    AppState.progressHistory.unshift({ teamId, mentorId: s.username, mentorName: s.displayName, previousStatus: prev.status, newStatus, previousPct: prev.pct || 0, newPct, remarks, reviewDate, updatedAt: now });
+    await DataRepository.saveState(['teamProgress', 'progressHistory']);
+    await DataRepository.logAudit('MENTOR_PROGRESS', `${s.username} updated ${teamId}: ${newStatus} (${newPct}%)`);
+    ModalUI.close(); this.renderDashboard(); Utils.toast(`Saved progress for ${teamId}`, 'success');
+  },
+  async exportMyReport() {
+    const s = this.getSession(); if (!s) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('My Assigned Teams');
+    ws.addRow(['Team ID', 'Team Leader', 'Department', 'Class', 'Register No', 'Project Status', 'Completion %', 'Remarks']);
+    this.getMyTeams().forEach(t => {
+      const p = AppState.teamProgress[t.teamId] || { status: 'Not Started', pct: 0, remarks: '' };
+      ws.addRow([t.teamId, t.leaderName, t.department, t.leaderClass || t.classSheet, t.registerNumber, p.status, p.pct || 0, p.remarks || '']);
+    });
+    await ExportModule.dl(wb, `Mentor_${s.username}_Progress_Report.xlsx`);
+  }
+};
+
 const App = {
   async autoHydrateRoster() {
     // 1. Try loading published-data.json (contains real 1,750 games, 263 sanitized teams, and published allocation)
@@ -1488,7 +1855,7 @@ const App = {
       await this.autoHydrateRoster();
     }
     LibraryModule.init(); GameManager.init(); TeamManager.init(); PreviewModule.init();
-    AuthModule.syncNav(); AuthModule.renderAuthView(); this.refreshAllUI();
+    AuthModule.syncNav(); MentorPortal.syncNav(); AuthModule.renderAuthView(); this.refreshAllUI();
     document.getElementById('mobileMenuToggle').addEventListener('click', () => document.getElementById('mainNavLinks').classList.toggle('open'));
     lucide.createIcons();
   },
@@ -1499,12 +1866,14 @@ const App = {
   },
   navigate(sec) {
     if (sec === 'admin-dashboard' && !AuthModule.isAuthenticated()) sec = 'admin-login';
+    if (sec === 'mentor-dashboard' && !MentorPortal.isAuthenticated()) sec = 'mentor-login';
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.getElementById(`section-${sec}`)?.classList.add('active');
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.nav === sec));
     document.getElementById('mainNavLinks').classList.remove('open');
     if (sec === 'admin-login') AuthModule.renderAuthView();
     if (sec === 'admin-dashboard') AdminUI.renderOverview();
+    if (sec === 'mentor-dashboard') MentorPortal.renderDashboard();
     if (sec === 'library') { LibraryModule.refreshFilters(); LibraryModule.render(1); }
     lucide.createIcons();
   },
